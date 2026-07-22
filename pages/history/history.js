@@ -20,6 +20,11 @@ Page({
     this._loadHistory();
   },
 
+  /* ========== 返回首页 ========== */
+  goBack() {
+    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
+  },
+
   onShow() {
     // 每次显示时刷新数据（可能从首页抽了新签）
     this._loadHistory();
@@ -168,7 +173,7 @@ Page({
   clearRecords() {
     wx.showModal({
       title: '确认清空',
-      content: '确定要清空所有求签历史吗？此操作不可恢复。',
+      content: '确定要清空所有咨询历史吗？此操作不可恢复。',
       confirmColor: '#c0392b',
       success: (res) => {
         if (res.confirm) {
@@ -227,7 +232,7 @@ Page({
   /* ========== 分享 ========== */
   onShareAppMessage() {
     return {
-      title: '云鹏解绪 - 求签历史',
+      title: '云鹏解绪 - 咨询历史',
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
     };

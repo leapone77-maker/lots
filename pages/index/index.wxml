@@ -11,12 +11,12 @@
   </view>
 
   <!-- 签筒区域 -->
-  <view class="tube-area {{isShaking ? 'shaking' : ''}}" bindtap="onDraw">
+  <view class="tube-area {{isShaking ? 'shaking' : ''}}">
     <!-- 飞签动画 -->
     <view class="flying-stick {{isFlying ? 'fly' : ''}}" wx:if="{{isFlying || floatingSign}}"></view>
 
-    <!-- 签筒本体 -->
-    <view class="tube-container">
+    <!-- 签筒本体（点击区限定为签筒资源大小） -->
+    <view class="tube-container" bindtap="onDraw">
       <view class="tube-rim top-rim"></view>
       <view class="tube-opening">
         <view class="stick"

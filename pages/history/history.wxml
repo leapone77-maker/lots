@@ -1,4 +1,12 @@
 <view class="page">
+  <!-- 顶部导航：返回 + 标题（与首页完全一致的样式） -->
+  <view class="nav-bar">
+    <view class="nav-back" bindtap="goBack">
+      <text class="back-icon">‹</text>
+    </view>
+    <text class="page-title">咨询历史</text>
+  </view>
+
   <!-- 统计卡片 -->
   <view class="stats-card">
     <view class="stat-item">
