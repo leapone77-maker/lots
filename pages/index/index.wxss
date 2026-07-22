@@ -1,0 +1,341 @@
+page {
+  background: #F5F0E6;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  /* 暖调米杏底 + 竖向微弱渐变 + 祥云暗纹 */
+  background:
+    url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='90'%20height='90'%20viewBox='0%200%2090%2090'>%0A<g%20fill='%23C9A961'%20fill-opacity='0.06'>%0A<path%20d='M22%2058c0-9%207-15%2015-14%203-9%2015-9%2018-1%208-3%2015%205%2012%2012-3%208-13%207-18%204-4%206-15%205-19-1-5%203-12-1-14-6z'/>%0A<path%20d='M52%2030c0-6%205-10%2011-9%202-6%2011-6%2013%200%206-2%2011%204%209%209-2%206-10%205-14%203-3%204-11%203-14-1-3%202-8-1-10-5z'/>%0A</g>%0A</svg>")
+    repeat,
+    linear-gradient(180deg, #FCF8F0 0%, #F5F0E6 45%, #EFE7D6 100%);
+}
+
+/* ===== 顶部导航栏 ===== */
+.nav-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30rpx 28rpx;
+  padding-top: calc(108rpx + env(safe-area-inset-top));
+}
+
+.page-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  letter-spacing: 2rpx;
+}
+
+/* ===== 历史入口（标题下方左侧，圆角底图） ===== */
+.history-entry {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-left: 28rpx;
+  margin-top: 8rpx;
+  padding: 14rpx 28rpx 14rpx 18rpx;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1rpx solid rgba(201, 169, 97, 0.2);
+  border-radius: 40rpx;
+  box-shadow: 0 2rpx 8rpx rgba(120, 85, 50, 0.06);
+  width: fit-content;
+}
+
+.history-icon {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.history-text {
+  font-size: 27rpx;
+  color: #333;
+}
+
+/* ===== 签筒区域（居中，放大1.5倍） ===== */
+.tube-area {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  min-height: 400rpx;
+  width: 100%;
+  transform: scale(1.5);
+}
+
+.tube-area.shaking {
+  animation: shakeTube 0.55s ease-in-out infinite;
+}
+
+@keyframes shakeTube {
+  0%, 100% { transform: translateX(0) rotate(0deg) scale(1.5); }
+  20% { transform: translateX(-6rpx) rotate(-2deg) scale(1.5); }
+  40% { transform: translateX(6rpx) rotate(2deg) scale(1.5); }
+  60% { transform: translateX(-4rpx) rotate(-1deg) scale(1.5); }
+  80% { transform: translateX(4rpx) rotate(1deg) scale(1.5); }
+}
+
+/* 飞签 —— 与筒内签子样式一致（红头黄身） */
+.flying-stick {
+  position: absolute;
+  width: 12rpx;
+  height: 140rpx;
+  background: linear-gradient(180deg, #C43028 0%, #C43028 18%, #E8D4A8 18%, #E8D4A8 100%);
+  border-radius: 3rpx 3rpx 2rpx 2rpx;
+  bottom: 45%;
+  left: 50%;
+  margin-left: -6rpx;
+  opacity: 0;
+  z-index: -1;
+  transform-origin: bottom center;
+  box-shadow: 2rpx 3rpx 8rpx rgba(120,70,30,0.25);
+}
+
+.flying-stick.fly {
+  animation: flyOut 0.8s ease-out forwards;
+}
+
+@keyframes flyOut {
+  0% { opacity: 1; transform: translateY(0) scale(0.75) rotate(12deg); }
+  100% { opacity: 0; transform: translateY(-700rpx) scale(1.8) rotate(0deg); }
+}
+
+/* 签筒本体 —— 微收腰哑光朱砂红国风款 */
+.tube-container {
+  position: relative;
+  width: 210rpx;
+  height: 252rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 18rpx 22rpx rgba(120,70,30,0.16));
+  z-index: 5;
+}
+
+/* 极淡暖光光晕 */
+.tube-container::before {
+  content: '';
+  position: absolute;
+  width: 360rpx;
+  height: 360rpx;
+  top: 46%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle,
+    rgba(201,169,97,0.22) 0%,
+    rgba(201,169,97,0.07) 42%,
+    transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* 哑光金口沿 */
+.tube-rim {
+  width: 200rpx;
+  height: 6rpx;
+  background: linear-gradient(180deg, #A8893F 0%, #8a6d2f 100%);
+  border-radius: 3rpx;
+  position: relative;
+  z-index: 3;
+}
+
+.tube-rim.top-rim {
+  display: none;
+}
+
+/* 筒口 */
+.tube-opening {
+  width: 186rpx;
+  height: 12rpx;
+  background: transparent;
+  position: relative;
+  overflow: visible;
+  z-index: 2;
+}
+
+.stick {
+  position: absolute;
+  bottom: -6rpx;
+  transform-origin: bottom center;
+  box-shadow: 1rpx 1rpx 3rpx rgba(80,40,20,0.25);
+}
+
+/* 筒身 */
+.tube-body {
+  width: 200rpx;
+  height: 150rpx;
+  background: linear-gradient(90deg,
+    #8a1812 0%, #A8201A 24%, #B22A22 50%, #A8201A 76%, #8a1812 100%);
+  clip-path: polygon(9% 0, 91% 0, 100% 100%, 0 100%);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.tube-body::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18%;
+  width: 14%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,235,210,0.08) 50%, transparent 100%);
+}
+
+/* 福字：行书书法 + 哑光烫金 */
+.tube-big-label {
+  color: #C9A961;
+  font-size: 68rpx;
+  font-family: 'STXingkai', 'KaiTi', 'LiSu', 'FangSong', serif;
+  font-weight: bold;
+  margin-top: 2rpx;
+  text-shadow:
+    0 1rpx 2rpx rgba(90,55,15,0.45),
+    0 0 8rpx rgba(201,169,97,0.3);
+  z-index: 3;
+}
+
+/* 底足金边 */
+.bottom-rim {
+  width: 206rpx;
+  height: 10rpx;
+  background: linear-gradient(180deg, #C9A961 0%, #A8893F 60%, #8a6d2f 100%);
+  border-radius: 2rpx 2rpx 6rpx 6rpx;
+  box-shadow: 0 2rpx 4rpx rgba(90,60,20,0.3);
+  z-index: 3;
+}
+
+.tube-base {
+  width: 196rpx;
+  height: 6rpx;
+  background: linear-gradient(180deg, rgba(120,70,30,0.25) 0%, transparent 100%);
+  border-radius: 0 0 50% 50%;
+  margin-top: 2rpx;
+}
+
+/* ===== 悬浮签 —— 米白竹木质感签牌 ===== */
+.floating-sign {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  z-index: 500;
+  opacity: 0;
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.floating-sign.show {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+
+.big-stick {
+  width: 140rpx;
+  height: 320rpx;
+  background:
+    linear-gradient(135deg,
+      #F5F0E6 0%, #EDE5D5 25%,
+      #F0EAD8 50%, #E8DFCC 75%,
+      #EDE5D5 100%);
+  border-radius: 18rpx;
+  border: 2rpx solid rgba(180, 155, 120, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 6rpx 24rpx rgba(120, 85, 50, 0.18),
+    0 2rpx 8rpx rgba(120, 85, 50, 0.12),
+    inset 0 1rpx 3rpx rgba(255, 255, 255, 0.6);
+  position: relative;
+  padding: 20rpx 16rpx;
+  box-sizing: border-box;
+}
+
+.big-stick::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 18rpx;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 28rpx,
+      rgba(180, 160, 130, 0.06) 28rpx,
+      rgba(180, 160, 130, 0.06) 29rpx
+    );
+  pointer-events: none;
+}
+
+.sign-vertical {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.sign-char {
+  color: #5C4A32;
+  font-size: 30rpx;
+  font-family: 'SourceHanSerifSC', 'STSong', 'SimSun', serif;
+  font-weight: bold;
+  line-height: 1.4;
+  letter-spacing: 2rpx;
+  text-shadow: 0 1rpx 1rpx rgba(255, 255, 255, 0.5);
+}
+
+.sign-digit {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #3D2E1F;
+  font-family: 'SourceHanSerifSC', 'STSong', 'SimSun', serif;
+}
+
+.sign-divider {
+  width: 60rpx;
+  height: 2rpx;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(160, 140, 110, 0.35) 20%,
+    rgba(160, 140, 110, 0.5) 50%,
+    rgba(160, 140, 110, 0.35) 80%,
+    transparent 100%);
+  margin: 14rpx 0 10rpx;
+  border-radius: 1rpx;
+}
+
+.sign-level {
+  color: #A8201A;
+  font-size: 28rpx;
+  font-weight: bold;
+  font-family: 'SourceHanSerifSC', 'STSong', 'SimSun', serif;
+  letter-spacing: 6rpx;
+  text-shadow: 0 1rpx 2rpx rgba(168, 32, 26, 0.15);
+}
+
+/* ===== 底部提示文字 ===== */
+.bottom-tip {
+  text-align: center;
+  padding: 0 0 calc(10rpx + env(safe-area-inset-bottom));
+  margin-top: auto;
+}
+
+.bottom-tip text {
+  font-size: 22rpx;
+  color: rgba(160, 140, 110, 0.5);
+}

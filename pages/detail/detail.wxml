@@ -1,0 +1,91 @@
+<view class="page">
+  <!-- 顶部导航：返回 + 标题 -->
+  <view class="nav-bar">
+    <view class="nav-back" bindtap="goBack">
+      <text class="back-icon">‹</text>
+    </view>
+    <text class="nav-title">云鹏解绪</text>
+  </view>
+
+  <!-- 整体可滚动区域：签诗 + 解签 + 聊天 全部一起滚 -->
+  <scroll-view class="main-scroll" scroll-y enhanced show-scrollbar="{{false}}" scroll-into-view="{{scrollToId}}">
+
+    <!-- 签诗卡片（自动展示） -->
+    <view class="qian-card" wx:if="{{qian}}">
+      <!-- 签号 + 等级 -->
+      <view class="qian-header">
+        <view class="qian-badge">{{qian.level}}</view>
+        <text class="qian-title">第 {{qian.id}} 签 · {{qian.level}}</text>
+      </view>
+
+      <!-- 签诗 -->
+      <view class="qian-poem-section">
+        <text class="poem-label">签诗</text>
+        <text class="poem-text">{{qian.poemText}}</text>
+      </view>
+
+      <!-- 分隔线 -->
+      <view class="card-divider"></view>
+
+      <!-- 基础解签（自动展示） -->
+      <view class="interpret-section" wx:if="{{qian.basic}}">
+        <text class="interp-label">解签</text>
+        <view class="interp-items">
+          <view class="interp-item" wx:if="{{qian.basic.career}}">
+            <text class="interp-tag">【事业】</text>
+            <text class="interp-val">{{qian.basic.career}}</text>
+          </view>
+          <view class="interp-item" wx:if="{{qian.basic.love}}">
+            <text class="interp-tag">【感情】</text>
+            <text class="interp-val">{{qian.basic.love}}</text>
+          </view>
+          <view class="interp-item" wx:if="{{qian.basic.wealth}}">
+            <text class="interp-tag">【财运】</text>
+            <text class="interp-val">{{qian.basic.wealth}}</text>
+          </view>
+          <view class="interp-item" wx:if="{{qian.basic.health}}">
+            <text class="interp-tag">【健康】</text>
+            <text class="interp-val">{{qian.basic.health}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="card-tip">
+        <text>💬 如需更深入的个性化解读，请直接向云鹏提问</text>
+      </view>
+    </view>
+
+    <!-- 聊天消息列表 -->
+    <view class="chat-messages">
+      <view class="message {{item.role}}" wx:for="{{chatMessages}}" wx:key="id" id="msg-{{item.id}}">
+        <view class="message-avatar">
+          <image wx:if="{{item.role === 'assistant'}}" class="avatar-logo" src="/images/jieqian-logo-peng.png" mode="aspectFit"/>
+          <text wx:elif="{{item.role === 'user'}}">我</text>
+        </view>
+        <view class="message-bubble">
+          <rich-text nodes="{{item.content}}"></rich-text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部留白（避免被输入栏遮挡最后一条消息） -->
+    <view style="height:160rpx;"></view>
+  </scroll-view>
+
+  <!-- 底部固定输入栏 -->
+  <view class="input-bar">
+    <input class="input-field"
+           placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向云鹏请教...'}}"
+           value="{{inputValue}}"
+           bindinput="onInput"
+           confirm-type="send"
+           bindconfirm="sendMessage"
+           adjust-position="{{true}}"/>
+    <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="sendMessage">
+      <text>咨询云鹏</text>
+    </view>
+  </view>
+
+  <!-- 登录弹窗 -->
+  <login-modal visible="{{showLogin}}" bind:close="onCloseLogin" bind:login="onLogin"/>
+</view>

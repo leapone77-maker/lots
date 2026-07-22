@@ -1,0 +1,83 @@
+<view class="page">
+  <!-- 统计卡片 -->
+  <view class="stats-card">
+    <view class="stat-item">
+      <text class="stat-num">{{stats.total}}</text>
+      <text class="stat-label">总计</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item">
+      <text class="stat-num stat-good">{{stats.shang}}</text>
+      <text class="stat-label">上签</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item">
+      <text class="stat-num stat-mid">{{stats.zhong}}</text>
+      <text class="stat-label">中签</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item">
+      <text class="stat-num stat-low">{{stats.xia}}</text>
+      <text class="stat-label">下签</text>
+    </view>
+  </view>
+
+  <!-- 日历区域 -->
+  <view class="calendar-card">
+    <!-- 月份切换 -->
+    <view class="cal-header">
+      <text class="cal-arrow" bindtap="prevMonth">‹</text>
+      <text class="cal-title">{{year}}年{{month}}月</text>
+      <text class="cal-arrow" bindtap="nextMonth">›</text>
+    </view>
+
+    <!-- 星期头 -->
+    <view class="cal-weekdays">
+      <text class="cal-wd" wx:for="{{weekdays}}" wx:key="*this">{{item}}</text>
+    </view>
+
+    <!-- 日期格子 -->
+    <view class="cal-days">
+      <view class="cal-day {{item.isCurrentMonth ? '' : 'other-month'}} {{item.isToday ? 'today' : ''}} {{item.isSelected ? 'selected' : ''}} {{item.hasRecord ? 'has-record' : ''}}"
+            wx:for="{{days}}"
+            wx:key="date"
+            bindtap="onDayTap"
+            data-date="{{item.date}}">
+        <text class="day-num">{{item.day}}</text>
+        <view class="day-dot" wx:if="{{item.hasRecord && item.isCurrentMonth}}"></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 当日记录列表 -->
+  <view class="records-section">
+    <!-- 标题栏：当日记录 + 显示全部/清空 -->
+    <view class="records-header">
+      <text class="records-title">当日记录</text>
+      <view class="records-actions">
+        <text class="action-link" bindtap="showAllRecords">显示全部</text>
+        <text class="action-link action-danger" bindtap="clearRecords">清空</text>
+      </view>
+    </view>
+
+    <!-- 记录列表 -->
+    <view class="records-list" wx:if="{{filteredRecords.length > 0}}">
+      <view class="record-item" wx:for="{{filteredRecords}}" wx:key="index" bindtap="onRecordTap" data-index="{{index}}">
+        <view class="record-badge">{{item.badgeText}}</view>
+        <view class="record-info">
+          <text class="record-name">{{item.poemTitle || ('第' + item.id + '签')}}</text>
+          <view class="record-meta">
+            <text class="record-level-tag level-{{levelClass(item.level)}}">{{item.level}}</text>
+            <text class="record-time">{{item.date}} {{item.time || ''}}</text>
+          </view>
+        </view>
+        <text class="record-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="records-empty" wx:if="{{filteredRecords.length === 0}}">
+      <text>该日暂无抽签记录</text>
+    </view>
+  </view>
+</view>

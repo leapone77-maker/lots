@@ -1,0 +1,58 @@
+<view class="page">
+  <!-- 顶部导航：标题 -->
+  <view class="nav-bar">
+    <text class="page-title">云鹏解绪</text>
+  </view>
+
+  <!-- 历史入口（标题下方左侧） -->
+  <view class="history-entry" bindtap="goHistory">
+    <image class="history-icon" src="/images/jieqian-logo-peng.png" mode="aspectFit"/>
+    <text class="history-text">历史</text>
+  </view>
+
+  <!-- 签筒区域 -->
+  <view class="tube-area {{isShaking ? 'shaking' : ''}}" bindtap="onDraw">
+    <!-- 飞签动画 -->
+    <view class="flying-stick {{isFlying ? 'fly' : ''}}" wx:if="{{isFlying || floatingSign}}"></view>
+
+    <!-- 签筒本体 -->
+    <view class="tube-container">
+      <view class="tube-rim top-rim"></view>
+      <view class="tube-opening">
+        <view class="stick"
+              wx:for="{{sticks}}"
+              wx:key="index"
+              style="left:{{item.x}}rpx; width:{{item.w}}rpx; height:{{item.h}}rpx; transform:rotate({{item.rot}}deg); background:{{item.bg}}; border-radius:{{item.br}};">
+        </view>
+      </view>
+      <view class="tube-body">
+        <text class="tube-big-label">福</text>
+      </view>
+      <view class="tube-rim bottom-rim"></view>
+      <view class="tube-base"></view>
+    </view>
+  </view>
+
+  <!-- 悬浮签（抽中后短暂停留） -->
+  <view class="floating-sign {{floatingSign ? 'show' : ''}}" wx:if="{{floatingSign}}">
+    <view class="big-stick">
+      <view class="sign-vertical">
+        <text class="sign-char">第</text>
+        <block wx:for="{{drawnIdChars}}" wx:key="*this">
+          <text class="sign-char sign-digit">{{item}}</text>
+        </block>
+        <text class="sign-char">号</text>
+      </view>
+      <view class="sign-divider"></view>
+      <text class="sign-level">{{drawnLevel}}</text>
+    </view>
+  </view>
+
+  <!-- 底部提示 -->
+  <view class="bottom-tip">
+    <text>本功能纯属娱乐，结果仅供参考</text>
+  </view>
+
+  <!-- 登录弹窗 -->
+  <login-modal visible="{{showLogin}}" bind:close="onCloseLogin" bind:login="onLogin"/>
+</view>

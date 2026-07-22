@@ -1,0 +1,66 @@
+.mask {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.dialog {
+  width: 80%;
+  padding: 50rpx 40rpx;
+  background: #241710;
+  position: relative;
+}
+
+.dlg-close {
+  position: absolute;
+  top: 16rpx;
+  right: 20rpx;
+  width: 48rpx;
+  height: 48rpx;
+  line-height: 44rpx;
+  text-align: center;
+  font-size: 28rpx;
+  color: rgba(255,255,255,0.4);
+  border-radius: 50%;
+  border: 1rpx solid rgba(255,255,255,0.15);
+}
+.dlg-title {
+  font-size: 40rpx;
+  color: #d4af37;
+  font-weight: bold;
+  text-align: center;
+}
+.dlg-sub {
+  font-size: 24rpx;
+  color: #9a8c7a;
+  text-align: center;
+  margin: 12rpx 0 40rpx;
+}
+.ipt {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid rgba(212, 175, 55, 0.3);
+  border-radius: 12rpx;
+  color: #f3e9d8;
+  padding: 22rpx 24rpx;
+  margin-bottom: 24rpx;
+  font-size: 30rpx;
+}
+.dlg-btn {
+  width: 100%;
+  padding: 22rpx;
+  margin-top: 10rpx;
+  background: #d4af37;
+  color: #241710;
+  font-size: 30rpx;
+  border-radius: 12rpx;
+  font-weight: bold;
+}
+.err {
+  color: #e0795b;
+  font-size: 26rpx;
+  text-align: center;
+  margin-top: 20rpx;
+}

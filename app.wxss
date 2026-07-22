@@ -1,0 +1,21 @@
+/* app.wxss - 全局样式（浅色国风主题） */
+page {
+  background: #F5F0E6;
+  color: #333333;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.qj-card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid rgba(201, 169, 97, 0.25);
+  border-radius: 24rpx;
+}
+.qj-btn {
+  background: linear-gradient(135deg, #d4af37, #b8860b);
+  color: #2b1a0f;
+  border-radius: 999rpx;
+  font-weight: bold;
+  border: none;
+}
+.qj-btn::after {
+  border: none;
+}

@@ -1,0 +1,306 @@
+page {
+  background: #F5F0E6;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  /* 暖调米杏底 + 祥云暗纹 */
+  background:
+    url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='90'%20height='90'%20viewBox='0%200%2090%2090'>%0A<g%20fill='%23C9A961'%20fill-opacity='0.06'>%0A<path%20d='M22%2058c0-9%207-15%2015-14%203-9%2015-9%2018-1%208-3%2015%205%2012%2012-3%208-13%207-18%204-4%206-15%205-19-1-5%203-12-1-14-6z'/>%0A<path%20d='M52%2030c0-6%205-10%2011-9%202-6%2011-6%2013%200%206-2%2011%204%209%209-2%206-10%205-14%203-3%204-11%203-14-1-3%202-8-1-10-5z'/>%0A</g>%0A</svg>")
+    repeat,
+    linear-gradient(180deg, #FCF8F0 0%, #F5F0E6 45%, #EFE7D6 100%);
+}
+
+/* ===== 导航栏（与首页一致） ===== */
+.nav-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20rpx 28rpx;
+  /* 与首页保持一致：状态栏(~44px≈88rpx) + 额外间距(~20rpx) */
+  padding-top: calc(108rpx + env(safe-area-inset-top));
+  position: relative;
+}
+
+.nav-back {
+  position: absolute;
+  left: 16rpx;
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 10rpx 8rpx;
+  /* 与标题垂直居中对齐：用 flex 布局保证同行 */
+}
+
+.back-icon {
+  font-size: 36rpx;
+  color: #333;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.nav-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  letter-spacing: 2rpx;
+}
+
+/* ===== 签诗卡片 ===== */
+.qian-card {
+  margin: 8rpx 24rpx 16rpx;
+  padding: 28rpx 28rpx 24rpx;
+  background: rgba(255, 253, 248, 0.85);
+  border: 1rpx solid rgba(201, 169, 97, 0.22);
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 20rpx rgba(120, 85, 50, 0.08);
+}
+
+.qian-header {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 18rpx;
+}
+
+.qian-badge {
+  padding: 6rpx 18rpx;
+  background: #A8201A;
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: bold;
+  border-radius: 8rpx;
+  letter-spacing: 2rpx;
+}
+
+.qian-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.qian-poem-section {
+  margin-bottom: 16rpx;
+}
+
+.poem-label {
+  display: block;
+  font-size: 24rpx;
+  color: #A8201A;
+  font-weight: bold;
+  margin-bottom: 8rpx;
+}
+
+.poem-text {
+  display: block;
+  font-size: 29rpx;
+  color: #333;
+  line-height: 1.75;
+  letter-spacing: 1rpx;
+}
+
+.card-divider {
+  height: 1rpx;
+  background: linear-gradient(90deg, transparent, rgba(201,169,97,0.3), transparent);
+  margin: 16rpx 0;
+}
+
+.interpret-section {
+  margin-bottom: 12rpx;
+}
+
+.interp-label {
+  display: block;
+  font-size: 24rpx;
+  color: #A8201A;
+  font-weight: bold;
+  margin-bottom: 10rpx;
+}
+
+.interp-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.interp-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.interp-tag {
+  font-size: 25rpx;
+  color: #A8201A;
+  font-weight: bold;
+}
+
+.interp-val {
+  font-size: 27rpx;
+  color: #333;
+  line-height: 1.65;
+}
+
+.card-tip {
+  margin-top: 14rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx dashed rgba(201,169,97,0.2);
+}
+
+.card-tip text {
+  font-size: 23rpx;
+  color: #8a6d3b;
+}
+
+/* ===== 整体可滚动区域（签诗+解签+聊天 一起滚）===== */
+.main-scroll {
+  flex: 1;
+  height: 0;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  padding: 12rpx 24rpx 0;
+}
+
+.message {
+  display: flex;
+  margin-bottom: 18rpx;
+  max-width: 88%;
+}
+
+.message.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+  margin-right: 4rpx;
+}
+
+.message.assistant {
+  align-self: flex-start;
+}
+
+.message-avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(168,32,26,0.08);
+  border: 1rpx solid rgba(168,32,26,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: 0 12rpx;
+  overflow: hidden;
+}
+
+.avatar-logo {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+}
+
+.message-avatar text {
+  font-size: 24rpx;
+  color: #A8201A;
+}
+
+.message-bubble {
+  background: rgba(255,255,255,0.72);
+  border-radius: 14rpx;
+  padding: 14rpx 16rpx;
+  word-break: break-all;
+  max-width: 480rpx;
+  box-shadow: 0 2rpx 10rpx rgba(120,90,50,0.06);
+}
+
+.message.user .message-bubble {
+  background: rgba(201,169,97,0.28);
+  border: 1rpx solid rgba(201,169,97,0.25);
+}
+
+.message.user .message-bubble rich-text {
+  color: #4a3728;
+}
+
+/* ===== "思考中"气泡动画 ===== */
+.thinking-bubble {
+  display: inline-block;
+  padding: 8rpx 0;
+}
+
+.thinking-dots {
+  color: #999;
+  font-size: 18px;
+  letter-spacing: 4rpx;
+  animation: thinkingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes thinkingPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* ===== 底部输入栏（毛玻璃）===== */
+.input-bar {
+  display: flex;
+  align-items: center;
+  padding: 14rpx 16rpx;
+  padding-bottom: calc(78rpx + env(safe-area-inset-bottom));
+  background: rgba(245,240,230,0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1rpx solid rgba(201,169,97,0.20);
+  position: relative;
+  z-index: 50;
+}
+
+.input-field {
+  flex: 1;
+  height: 88rpx;
+  background: rgba(255,255,255,0.6);
+  border: 1rpx solid rgba(201,169,97,0.25);
+  border-radius: 20rpx;
+  padding: 0 28rpx;
+  font-size: 32rpx;
+  color: #333333;
+  margin-right: 16rpx;
+}
+
+.input-field::placeholder {
+  color: rgba(80,60,40,0.45);
+  font-size: 30rpx;
+}
+
+.send-btn {
+  min-width: 148rpx;
+  height: 88rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(168,32,26,0.12);
+  flex-shrink: 0;
+}
+
+.send-btn.active {
+  background: #A8201A;
+}
+
+.send-btn text {
+  font-size: 28rpx;
+  color: #A8201A;
+  white-space: nowrap;
+}
+
+.send-btn.active text {
+  color: #ffffff;
+  font-weight: bold;
+}

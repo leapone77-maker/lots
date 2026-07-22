@@ -1,0 +1,18 @@
+# 依赖
+node_modules/
+cloudfunctions/**/node_modules/
+
+# 微信开发者工具私有配置（含本地路径/设置）
+project.private.config.json
+
+# 本地记忆/缓存（非源码）
+.workbuddy/
+
+# 凭证（预防误提交）
+.env
+*.env
+
+# 系统/日志
+.DS_Store
+*.log
+miniprogram_npm/
