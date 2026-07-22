@@ -1,7 +1,7 @@
 const QIAN_DB = require('../../utils/qianData.js');
 
 // 测试期放开每日抽签限制；正式发布改为 false 即启用每日一次限制
-const TEST_MODE = true;
+const TEST_MODE = false;
 
 Page({
   data: {
@@ -19,10 +19,20 @@ Page({
   },
 
   onLoad() {
+    this._initNavBar();
     this.initSticks();
     this.checkDailyLimit();
     this.checkLogin();
     this._loadSerifFont();
+  },
+
+  /* ========== 动态导航栏（与胶囊对齐）========== */
+  _initNavBar() {
+    const menu = wx.getMenuButtonBoundingClientRect();
+    this.setData({
+      navBarTop: menu.top,
+      navBarHeight: menu.height
+    });
   },
 
   /* ========== 加载思源宋体（真机需配置 downloadFile 合法域名 cdn.jsdelivr.net）========== */

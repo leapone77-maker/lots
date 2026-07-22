@@ -16,8 +16,18 @@ Page({
   },
 
   onLoad() {
+    this._initNavBar();
     this._initToday();
     this._loadHistory();
+  },
+
+  /* ========== 动态导航栏（与胶囊对齐）========== */
+  _initNavBar() {
+    const menu = wx.getMenuButtonBoundingClientRect();
+    this.setData({
+      navBarTop: menu.top,
+      navBarHeight: menu.height
+    });
   },
 
   /* ========== 返回首页 ========== */

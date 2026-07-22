@@ -3,14 +3,19 @@ page {
   min-height: 100vh;
 }
 
-/* ===== 顶部导航栏（与首页完全一致） ===== */
+/* ===== 顶部导航栏（动态对齐胶囊） ===== */
 .nav-bar {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 30rpx 28rpx;
-  padding-top: calc(88rpx + env(safe-area-inset-top));
+  padding: 0 28rpx;
+}
+
+.nav-content {
+  display: flex;
+  align-items: center;
   position: relative;
+  width: 100%;
 }
 
 .nav-back {

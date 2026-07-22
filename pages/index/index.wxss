@@ -18,13 +18,18 @@ page {
     linear-gradient(180deg, #FCF8F0 0%, #F5F0E6 45%, #EFE7D6 100%);
 }
 
-/* ===== 顶部导航栏 ===== */
+/* ===== 顶部导航栏（动态对齐胶囊） ===== */
 .nav-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 28rpx;
+}
+
+.nav-content {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 30rpx 28rpx;
-  padding-top: calc(108rpx + env(safe-area-inset-top));
 }
 
 .page-title {

@@ -13,6 +13,7 @@ Page({
   },
 
   onLoad(options) {
+    this._initNavBar();
     // 从缓存读取今日签数据（首页抽签时已存入）
     const cachedQian = wx.getStorageSync('cachedQian');
     if (cachedQian) {
@@ -71,6 +72,14 @@ Page({
   },
 
   /* ========== 导航 ========== */
+  _initNavBar() {
+    const menu = wx.getMenuButtonBoundingClientRect();
+    this.setData({
+      navBarTop: menu.top,
+      navBarHeight: menu.height
+    });
+  },
+
   goBack() {
     wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
   },

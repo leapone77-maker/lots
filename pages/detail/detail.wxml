@@ -1,10 +1,12 @@
 <view class="page">
-  <!-- 顶部导航：返回 + 标题 -->
-  <view class="nav-bar">
-    <view class="nav-back" bindtap="goBack">
-      <text class="back-icon">‹</text>
+  <!-- 顶部导航：返回 + 标题（动态对齐胶囊） -->
+  <view class="nav-bar" style="padding-top:{{navBarTop}}px">
+    <view class="nav-content" style="height:{{navBarHeight}}px; line-height:{{navBarHeight}}px">
+      <view class="nav-back" bindtap="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">云鹏解绪</text>
     </view>
-    <text class="nav-title">云鹏解绪</text>
   </view>
 
   <!-- 整体可滚动区域：签诗 + 解签 + 聊天 全部一起滚 -->

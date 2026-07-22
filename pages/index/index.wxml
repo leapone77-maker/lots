@@ -1,13 +1,14 @@
 <view class="page">
-  <!-- 顶部导航：标题 -->
-  <view class="nav-bar">
-    <text class="page-title">云鹏解绪</text>
-  </view>
-
-  <!-- 历史入口（标题下方左侧） -->
-  <view class="history-entry" bindtap="goHistory">
-    <image class="history-icon" src="/images/jieqian-logo-peng.png" mode="aspectFit"/>
-    <text class="history-text">历史</text>
+  <!-- 顶部导航：标题（动态对齐胶囊） -->
+  <view class="nav-bar" style="padding-top:{{navBarTop}}px">
+    <view class="nav-content" style="height:{{navBarHeight}}px; line-height:{{navBarHeight}}px">
+      <text class="page-title">云鹏解绪</text>
+    </view>
+    <!-- 历史入口（紧贴标题下方） -->
+    <view class="history-entry" bindtap="goHistory">
+      <image class="history-icon" src="/images/jieqian-logo-peng.png" mode="aspectFit"/>
+      <text class="history-text">历史</text>
+    </view>
   </view>
 
   <!-- 签筒区域 -->
