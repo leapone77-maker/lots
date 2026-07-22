@@ -226,6 +226,14 @@ exports.main = async function(event, context) {
       return { code: 0, content: reply }
     }
 
+    // ---- 清空全部测试数据（users + memories）----
+    if (action === 'clearAllData') {
+      const _ = db.command
+      await users.where({ _id: _.exists(true) }).remove()
+      await memories.where({ _id: _.exists(true) }).remove()
+      return { code: 0, msg: 'users 与 memories 已清空' }
+    }
+
     return { code: 1, msg: '未知操作：' + action }
   } catch (e) {
     console.error('[jieqian] error:', e)
