@@ -1,5 +1,8 @@
 const QIAN_DB = require('../../utils/qianData.js');
 
+// 测试期放开每日抽签限制；正式发布改为 false 即启用每日一次限制
+const TEST_MODE = true;
+
 Page({
   data: {
     sticks: [],
@@ -16,44 +19,18 @@ Page({
   },
 
   onLoad() {
-    // ===== 测试期：清空所有本地旧测试数据（正式发布时整段删除） =====
-    [
-      'lastDrawDate',      // 每日抽签日期标记
-      'cachedQian',        // 今日签缓存
-      'drawHistory',       // 历史抽签记录（测试数据主要来源）
-      'localChatMessages', // 首页旧聊天记录（已弃用）
-      'detailChatMessages',// 详情页聊天记录
-      'userMemories',      // 云端记忆本地缓存
-      'localMemories',     // 本地记忆标签
-      'userInfo',          // 登录态
-      'jq_token',          // 旧架构残留
-      'jq_user',           // 旧架构残留
-      'jq_current_qian'    // 旧架构残留
-    ].forEach(k => wx.removeStorageSync(k));
-    // =============================================================
-
-    // 测试期：若已登录测试账号，同步清空云端记忆（正式发布时删除）
-    const testUser = wx.getStorageSync('userInfo')
-    if (testUser && testUser.token) {
-      wx.cloud.callFunction({
-        name: 'jieqian',
-        data: { action: 'clearMemories', token: testUser.token }
-      }).catch(() => {})
-    }
-
     this.initSticks();
     this.checkDailyLimit();
     this.checkLogin();
     this._loadSerifFont();
   },
 
-  /* ========== 加载思源宋体 ========== */
+  /* ========== 加载思源宋体（真机需配置 downloadFile 合法域名 cdn.jsdelivr.net）========== */
   _loadSerifFont() {
     wx.loadFontFace({
       family: 'SourceHanSerifSC',
       source: 'url("https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/files/noto-serif-sc-chinese-simplified-400-normal.woff")',
       desc: { weight: 'normal', style: 'normal' },
-      success: () => console.log('[云鹏解绪] 思源宋体加载成功'),
       fail: (err) => console.warn('[云鹏解绪] 思源宋体加载失败：', err)
     });
   },
@@ -73,7 +50,7 @@ Page({
       const bodyColor = bodyColors[i % bodyColors.length];
       sticks.push({
         x: Math.max(8, Math.min(184, x)),
-        h: h,
+        h,
         w: 10 + Math.floor(Math.random() * 6),
         rot: -10 + Math.floor(Math.random() * 21),
         bg: `linear-gradient(180deg, ${tipColor} 0%, ${tipColor} 18%, ${bodyColor} 18%, ${bodyColors[(i + 1) % bodyColors.length]} 100%)`,
@@ -83,24 +60,16 @@ Page({
     this.setData({ sticks });
   },
 
-  /* ========== 每日一次限制（测试期放开）========== */
+  /* ========== 每日抽签限制 ========== */
   checkDailyLimit() {
-    // 测试期：强制放开限制
-    this.setData({ canDraw: true });
-    return;
-
-    /* ===== 正式版时删除上面两行，启用以下代码 =====
+    if (TEST_MODE) {
+      this.setData({ canDraw: true });
+      return;
+    }
     const todayStr = new Date().toISOString().slice(0, 10);
     const lastDate = wx.getStorageSync('lastDrawDate') || '';
-    if (lastDate === todayStr) {
-      const cachedQian = wx.getStorageSync('cachedQian');
-      if (cachedQian) {
-        this.setData({ canDraw: false });
-      }
-    } else {
-      this.setData({ canDraw: true });
-    }
-    ===== 正式版代码结束 ===== */
+    const cachedQian = wx.getStorageSync('cachedQian');
+    this.setData({ canDraw: lastDate !== todayStr || !cachedQian });
   },
 
   /* ========== 跳转历史页 ========== */
@@ -124,23 +93,21 @@ Page({
       this.setData({ isShaking: false, isFlying: true });
     }, 2000);
 
-    // 阶段2（2.8s）：飞签已飞出屏幕外(0.8s) + 出结果 + 弹悬浮签
+    // 阶段2（2.8s）：飞签已飞出屏幕外 + 出结果 + 弹悬浮签
     setTimeout(() => {
-      const randomIndex = Math.floor(Math.random() * QIAN_DB.length);
-      const qian = QIAN_DB[randomIndex];
+      const qian = QIAN_DB[Math.floor(Math.random() * QIAN_DB.length)];
+      const todayStr = new Date().toISOString().slice(0, 10);
 
       // 缓存今日签（供详情页读取）
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const qianCache = {
+      wx.setStorageSync('lastDrawDate', todayStr);
+      wx.setStorageSync('cachedQian', {
         id: qian.id,
         level: qian.level,
         poemText: Array.isArray(qian.poem) ? qian.poem.join('，') : qian.poem,
         poemRaw: qian.poem,
         basic: qian.basic,
         keywords: qian.keywords || []
-      };
-      wx.setStorageSync('lastDrawDate', todayStr);
-      wx.setStorageSync('cachedQian', qianCache);
+      });
 
       // 历史记录（完整数据，供历史页展示）
       const history = wx.getStorageSync('drawHistory') || [];
@@ -149,17 +116,16 @@ Page({
         time: new Date().toTimeString().slice(0, 5),
         id: qian.id,
         level: qian.level,
-        poemTitle: qian.poem[0] || '', // 取首句作为标题
+        poemTitle: qian.poem[0] || '',
         basic: qian.basic
       });
       wx.setStorageSync('drawHistory', history.slice(0, 100));
 
-      // 云端保存记忆
+      // 已登录则同步云端记忆
       if (this.data.isLoggedIn) {
         this._saveMemory(`抽到第${qian.id}签 ${qian.level}`);
       }
 
-      // 飞签动画已完成（2.0s起飞 + 0.8s = 2.8s），隐藏飞签元素 + 弹出悬浮签
       this.setData({
         isFlying: false,
         floatingSign: true,
@@ -169,9 +135,7 @@ Page({
       });
 
       // 悬浮签 2 秒后自动隐藏
-      setTimeout(() => {
-        this.setData({ floatingSign: false });
-      }, 2000);
+      setTimeout(() => this.setData({ floatingSign: false }), 2000);
 
       // 第3.0s：跳转详情页
       setTimeout(() => {
@@ -179,14 +143,13 @@ Page({
           url: `/pages/detail/detail?id=${qian.id}&level=${encodeURIComponent(qian.level)}`
         });
       }, 200);
-
     }, 2800);
   },
 
   _saveMemory(content) {
     wx.cloud.callFunction({
       name: 'jieqian',
-      data: { action: 'saveMemory', content: content }
+      data: { action: 'saveMemory', content }
     }).catch(() => {});
   },
 
@@ -226,7 +189,6 @@ Page({
   onShareTimeline() {
     return {
       title: '云鹏解绪 - 心诚则灵',
-      query: '',
       imageUrl: '/images/jieqian-logo-peng.png'
     };
   }

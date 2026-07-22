@@ -208,15 +208,6 @@ exports.main = async function(event, context) {
       return { code: 0, memories: list }
     }
 
-    // ---- 清空记忆（测试期用，按 uid 删除该用户全部记忆）----
-    if (action === 'clearMemories') {
-      var token = event.token
-      var u = await authByToken(token)
-      if (!u) return { code: 401, msg: '未登录' }
-      await memories.where({ uid: u._id }).remove()
-      return { code: 0, msg: '记忆已清空' }
-    }
-
     // ---- AI 解签对话 ----
     if (action === 'chat') {
       var qian = event.currentQian || null       // 当前签文对象
