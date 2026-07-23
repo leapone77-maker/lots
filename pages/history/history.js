@@ -208,6 +208,7 @@ Page({
 
     // 将该次签的数据写入缓存，跳转到详情页查看
     wx.setStorageSync('cachedQian', {
+      date: record.date ? record.date.slice(0, 10) : '',
       id: record.id,
       level: record.level,
       poemText: '',

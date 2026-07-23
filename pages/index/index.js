@@ -1,4 +1,5 @@
 const QIAN_DB = require('../../utils/qianData.js');
+const { getBeijingDateStr } = require('../../utils/dateUtil.js');
 
 // 测试期放开每日抽签限制；正式发布改为 false 即启用每日一次限制
 const TEST_MODE = false;
@@ -76,7 +77,7 @@ Page({
       this.setData({ canDraw: true });
       return;
     }
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getBeijingDateStr();
     const lastDate = wx.getStorageSync('lastDrawDate') || '';
     const cachedQian = wx.getStorageSync('cachedQian');
     this.setData({ canDraw: lastDate !== todayStr || !cachedQian });
@@ -106,11 +107,12 @@ Page({
     // 阶段2（2.8s）：飞签已飞出屏幕外 + 出结果 + 弹悬浮签
     setTimeout(() => {
       const qian = QIAN_DB[Math.floor(Math.random() * QIAN_DB.length)];
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = getBeijingDateStr();
 
       // 缓存今日签（供详情页读取）
       wx.setStorageSync('lastDrawDate', todayStr);
       wx.setStorageSync('cachedQian', {
+        date: todayStr,
         id: qian.id,
         level: qian.level,
         poemText: Array.isArray(qian.poem) ? qian.poem.join('，') : qian.poem,

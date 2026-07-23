@@ -1,3 +1,5 @@
+const { getBeijingDateStr } = require('../../utils/dateUtil.js');
+
 Page({
   data: {
     qian: null,
@@ -25,6 +27,8 @@ Page({
         drawnPoem: cachedQian.poemText,
         drawnBasic: cachedQian.basic
       });
+      // 聊天记录按"抽签日期"隔离：同一天的签共享同一段对话，跨天/换签则开新会话
+      this._chatDate = cachedQian.date || getBeijingDateStr();
     } else if (options && options.id) {
       // 兜底：从参数构建（仅基本信息）
       this.setData({
@@ -57,6 +61,7 @@ Page({
         drawnPoem: cachedQian.poemText,
         drawnBasic: cachedQian.basic
       });
+      this._chatDate = cachedQian.date || getBeijingDateStr();
     }
   },
 
@@ -90,8 +95,10 @@ Page({
 
   /* ========== 本地聊天持久化 ========== */
   loadLocalChat() {
-    // 详情页使用独立的聊天存储 key，与首页隔离
-    const saved = wx.getStorageSync('detailChatMessages');
+    // 聊天记录按"抽签日期"隔离（key 含日期），新的一天/换签自动从空白会话开始，
+    // 不再把昨天的对话（含 AI 回复）载入，也不会被当成上下文发给 AI
+    const key = 'detailChat_' + (this._chatDate || getBeijingDateStr());
+    const saved = wx.getStorageSync(key);
     if (saved && Array.isArray(saved) && saved.length > 0) {
       this.setData({
         chatMessages: saved,
@@ -101,8 +108,9 @@ Page({
   },
 
   _persistChat() {
+    const key = 'detailChat_' + (this._chatDate || getBeijingDateStr());
     const list = this.data.chatMessages.slice(-100);
-    wx.setStorageSync('detailChatMessages', list);
+    wx.setStorageSync(key, list);
   },
 
   /* ========== 登录相关 ========== */
