@@ -31,6 +31,17 @@ Page({
     this._loadSerifFont();
   },
 
+  // 从详情页 navigateBack 返回时，首页不会被销毁、onLoad 不重跑，
+  // 必须在这里重算每日限制，否则 canDraw 停留在抽前状态导致可反复抽签
+  onShow() {
+    this.appConfig = config.getCachedConfig();
+    this.checkDailyLimit();
+    config.fetchConfig().then((cfg) => {
+      this.appConfig = cfg;
+      this.checkDailyLimit();
+    });
+  },
+
   /* ========== 动态导航栏（与胶囊对齐）========== */
   _initNavBar() {
     const menu = wx.getMenuButtonBoundingClientRect();
@@ -148,7 +159,8 @@ Page({
         floatingSign: true,
         drawnId: qian.id,
         drawnIdChars: String(qian.id).split(''),
-        drawnLevel: qian.level
+        drawnLevel: qian.level,
+        canDraw: false
       });
 
       // 悬浮签 2 秒后自动隐藏
