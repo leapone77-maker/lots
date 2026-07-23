@@ -121,7 +121,7 @@ Page({
     wx.setStorageSync(key, list);
   },
 
-  /* ========== 登录相关（受后台 phoneLoginRequired 开关控制）========== */
+  /* ========== 登录相关（受后台 loginRequired 开关控制）========== */
   checkLogin() {
     const cfg = this.appConfig || config.getCachedConfig();
     const userInfo = wx.getStorageSync('userInfo');
@@ -129,7 +129,7 @@ Page({
       // 已登录（有账号 token）：使用云端记忆同步
       this.setData({ isLoggedIn: true, userInfo });
       this.loadMemories();
-    } else if (cfg.phoneLoginRequired === false) {
+    } else if (cfg.loginRequired === false) {
       // 后台已关闭手机号登录：视为已登录（仅本地记忆），不弹登录框、不强制登录
       this.setData({ isLoggedIn: true });
     }
@@ -229,7 +229,7 @@ Page({
     this._showThinking();
 
     // 后台要求手机号登录且用户未登录 → 弹登录框
-    if (this.appConfig.phoneLoginRequired && !this.data.isLoggedIn) {
+    if (this.appConfig.loginRequired && !this.data.isLoggedIn) {
       this._pendingQuestion = content;
       this.setData({ showLogin: true });
       return;
@@ -396,8 +396,8 @@ Page({
       localMemories.push(...extracted.map(e => `${e.time.slice(0,10)} ${e.tag}`));
       wx.setStorageSync('localMemories', localMemories.slice(-30));
 
-      // 仅当后台开启"手机号登录"(phoneLoginRequired=true)时才上报云端，实现跨设备同步
-      if (this.appConfig.phoneLoginRequired && this.data.isLoggedIn) {
+      // 仅当后台开启"手机号登录"(loginRequired=true)时才上报云端，实现跨设备同步
+      if (this.appConfig.loginRequired && this.data.isLoggedIn) {
         const memoryText = extracted.map(e => `[${e.cat}] ${e.tag}`).join(', ');
         this._saveMemory(memoryText);
       }
@@ -407,7 +407,7 @@ Page({
   getAIMemory() {
     const cfg = this.appConfig || config.getCachedConfig();
     // 开启手机号登录 → 云端记忆(已同步) + 本地兜底；关闭 → 仅本地记忆
-    const cloudMemories = cfg.phoneLoginRequired ? (wx.getStorageSync('userMemories') || []) : [];
+    const cloudMemories = cfg.loginRequired ? (wx.getStorageSync('userMemories') || []) : [];
     const localMemories = wx.getStorageSync('localMemories') || [];
     const all = [...cloudMemories, ...localMemories];
     if (all.length === 0) return '';
