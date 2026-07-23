@@ -8,6 +8,9 @@
  * 数据库集合（需在云开发控制台手动创建）：
  *   - users    : { _id, phone, password, token, nickname, created }
  *   - memories: { _id, uid, phone, event, cat, tag, created }
+ *   - app_config (后台开关，手动创建一次): 文档 _id='global'
+ *        { testMode: bool, phoneLoginRequired: bool }
+ *        testMode=true 关闭每日抽签限制(测试态); phoneLoginRequired=true 要求手机号登录(记忆云端同步)
  */
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
@@ -232,6 +235,33 @@ exports.main = async function(event, context) {
       await users.where({ _id: _.exists(true) }).remove()
       await memories.where({ _id: _.exists(true) }).remove()
       return { code: 0, msg: 'users 与 memories 已清空' }
+    }
+
+    // ---- 读取后台开关（热更新，无需提交小程序版本）----
+    // 集合 app_config 文档 _id='global'：{ testMode, phoneLoginRequired }
+    // 首次调用自动写入默认值；集合未创建时安全回退默认值，不报错
+    if (action === 'getConfig') {
+      const DEFAULTS = { testMode: false, phoneLoginRequired: false }
+      try {
+        const col = db.collection('app_config')
+        let doc = null
+        try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
+        if (!doc) {
+          try {
+            await col.add({ _id: 'global', testMode: false, phoneLoginRequired: false, updatedAt: new Date() })
+          } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
+          return { code: 0, config: DEFAULTS }
+        }
+        return {
+          code: 0,
+          config: {
+            testMode: typeof doc.testMode === 'boolean' ? doc.testMode : DEFAULTS.testMode,
+            phoneLoginRequired: typeof doc.phoneLoginRequired === 'boolean' ? doc.phoneLoginRequired : DEFAULTS.phoneLoginRequired
+          }
+        }
+      } catch (e) {
+        return { code: 0, config: DEFAULTS }
+      }
     }
 
     return { code: 1, msg: '未知操作：' + action }

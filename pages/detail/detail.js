@@ -1,4 +1,5 @@
 const { getBeijingDateStr } = require('../../utils/dateUtil.js');
+const config = require('../../utils/config.js');
 
 Page({
   data: {
@@ -44,9 +45,16 @@ Page({
       });
     }
 
+    this.appConfig = config.getCachedConfig();
     this.checkLogin();
     this.loadLocalChat();
     this._loadSerifFont();
+
+    // 拉取后台开关，拿到最新值后用最新开关重算登录态（热更新）
+    config.fetchConfig().then((cfg) => {
+      this.appConfig = cfg;
+      this.checkLogin();
+    });
   },
 
   onShow() {
@@ -113,12 +121,17 @@ Page({
     wx.setStorageSync(key, list);
   },
 
-  /* ========== 登录相关 ========== */
+  /* ========== 登录相关（受后台 phoneLoginRequired 开关控制）========== */
   checkLogin() {
+    const cfg = this.appConfig || config.getCachedConfig();
     const userInfo = wx.getStorageSync('userInfo');
     if (userInfo) {
+      // 已登录（有账号 token）：使用云端记忆同步
       this.setData({ isLoggedIn: true, userInfo });
       this.loadMemories();
+    } else if (cfg.phoneLoginRequired === false) {
+      // 后台已关闭手机号登录：视为已登录（仅本地记忆），不弹登录框、不强制登录
+      this.setData({ isLoggedIn: true });
     }
   },
 
@@ -215,8 +228,8 @@ Page({
     // 显示"思考中"
     this._showThinking();
 
-    // 未登录弹登录框
-    if (!this.data.isLoggedIn) {
+    // 后台要求手机号登录且用户未登录 → 弹登录框
+    if (this.appConfig.phoneLoginRequired && !this.data.isLoggedIn) {
       this._pendingQuestion = content;
       this.setData({ showLogin: true });
       return;
@@ -377,17 +390,24 @@ Page({
       });
     });
 
-    if (extracted.length > 0 && this.data.isLoggedIn) {
-      const memoryText = extracted.map(e => `[${e.cat}] ${e.tag}`).join(', ');
-      this._saveMemory(memoryText);
+    if (extracted.length > 0) {
+      // 记忆标签永远写入本地（关闭登录时仅本地，无需跨设备同步）
       const localMemories = wx.getStorageSync('localMemories') || [];
       localMemories.push(...extracted.map(e => `${e.time.slice(0,10)} ${e.tag}`));
       wx.setStorageSync('localMemories', localMemories.slice(-30));
+
+      // 仅当后台开启"手机号登录"(phoneLoginRequired=true)时才上报云端，实现跨设备同步
+      if (this.appConfig.phoneLoginRequired && this.data.isLoggedIn) {
+        const memoryText = extracted.map(e => `[${e.cat}] ${e.tag}`).join(', ');
+        this._saveMemory(memoryText);
+      }
     }
   },
 
   getAIMemory() {
-    const cloudMemories = wx.getStorageSync('userMemories') || [];
+    const cfg = this.appConfig || config.getCachedConfig();
+    // 开启手机号登录 → 云端记忆(已同步) + 本地兜底；关闭 → 仅本地记忆
+    const cloudMemories = cfg.phoneLoginRequired ? (wx.getStorageSync('userMemories') || []) : [];
     const localMemories = wx.getStorageSync('localMemories') || [];
     const all = [...cloudMemories, ...localMemories];
     if (all.length === 0) return '';

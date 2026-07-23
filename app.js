@@ -1,4 +1,6 @@
 // app.js
+const config = require('./utils/config.js')
+
 App({
   onLaunch() {
     // 初始化云开发
@@ -10,6 +12,8 @@ App({
         traceUser: true
       })
     }
+    // 预热后台开关（热更新，无需提交小程序版本）
+    config.fetchConfig()
   },
   globalData: {}
 })

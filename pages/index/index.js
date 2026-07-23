@@ -1,8 +1,6 @@
 const QIAN_DB = require('../../utils/qianData.js');
 const { getBeijingDateStr } = require('../../utils/dateUtil.js');
-
-// 测试期放开每日抽签限制；正式发布改为 false 即启用每日一次限制
-const TEST_MODE = false;
+const config = require('../../utils/config.js');
 
 Page({
   data: {
@@ -22,7 +20,13 @@ Page({
   onLoad() {
     this._initNavBar();
     this.initSticks();
+    this.appConfig = config.getCachedConfig();
     this.checkDailyLimit();
+    // 拉取后台开关，拿到最新值后重算（热更新）
+    config.fetchConfig().then((cfg) => {
+      this.appConfig = cfg;
+      this.checkDailyLimit();
+    });
     this.checkLogin();
     this._loadSerifFont();
   },
@@ -71,9 +75,10 @@ Page({
     this.setData({ sticks });
   },
 
-  /* ========== 每日抽签限制 ========== */
+  /* ========== 每日抽签限制（受后台 testMode 开关控制）========== */
   checkDailyLimit() {
-    if (TEST_MODE) {
+    const cfg = this.appConfig || config.getCachedConfig();
+    if (cfg.testMode) {
       this.setData({ canDraw: true });
       return;
     }
