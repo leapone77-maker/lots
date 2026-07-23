@@ -238,17 +238,17 @@ exports.main = async function(event, context) {
     }
 
     // ---- 读取后台开关（热更新，无需提交小程序版本）----
-    // 集合 app_config 文档 _id='global'：{ testMode, loginRequired }
+    // 集合 app_config 文档 _id='global'：{ testMode, loginRequired, localMode }
     // 首次调用自动写入默认值；集合未创建时安全回退默认值，不报错
     if (action === 'getConfig') {
-      const DEFAULTS = { testMode: false, loginRequired: false }
+      const DEFAULTS = { testMode: false, loginRequired: false, localMode: true }
       try {
         const col = db.collection('app_config')
         let doc = null
         try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
         if (!doc) {
           try {
-            await col.add({ _id: 'global', testMode: false, loginRequired: false, updatedAt: new Date() })
+            await col.add({ _id: 'global', testMode: false, loginRequired: false, localMode: true, updatedAt: new Date() })
           } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
           return { code: 0, config: DEFAULTS }
         }
@@ -259,7 +259,8 @@ exports.main = async function(event, context) {
             // 兼容旧字段 phoneLoginRequired：改名过渡期读取旧值，避免已配"要求登录"的配置失效
             loginRequired: typeof doc.loginRequired === 'boolean'
               ? doc.loginRequired
-              : (typeof doc.phoneLoginRequired === 'boolean' ? doc.phoneLoginRequired : DEFAULTS.loginRequired)
+              : (typeof doc.phoneLoginRequired === 'boolean' ? doc.phoneLoginRequired : DEFAULTS.loginRequired),
+            localMode: typeof doc.localMode === 'boolean' ? doc.localMode : DEFAULTS.localMode
           }
         }
       } catch (e) {

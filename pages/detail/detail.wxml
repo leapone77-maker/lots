@@ -52,7 +52,7 @@
         </view>
       </view>
 
-      <view class="card-tip">
+      <view class="card-tip" wx:if="{{!localMode}}">
         <text>💬 如需更深入的个性化解读，请直接向云鹏提问</text>
       </view>
     </view>
@@ -74,8 +74,8 @@
     <view style="height:160rpx;"></view>
   </scroll-view>
 
-  <!-- 底部固定输入栏 -->
-  <view class="input-bar">
+  <!-- 底部固定输入栏（localMode=false 时显示） -->
+  <view class="input-bar" wx:if="{{!localMode}}">
     <input class="input-field"
            placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向云鹏请教...'}}"
            value="{{inputValue}}"

@@ -12,7 +12,8 @@ Page({
     userInfo: null,
     scrollToId: '',
     _thinkingId: null,
-    _hasShownBasic: true  // 详情页自动展示解签，标记为已展示
+    _hasShownBasic: true,  // 详情页自动展示解签，标记为已展示
+    localMode: true        // 纯本地模式(默认true=不连AI、隐藏输入框)；false=开启AI对话
   },
 
   onLoad(options) {
@@ -46,6 +47,7 @@ Page({
     }
 
     this.appConfig = config.getCachedConfig();
+    this.setData({ localMode: this.appConfig.localMode !== false });  // 默认true（纯本地）
     this.checkLogin();
     this.loadLocalChat();
     this._loadSerifFont();
@@ -53,6 +55,7 @@ Page({
     // 拉取后台开关，拿到最新值后用最新开关重算登录态（热更新）
     config.fetchConfig().then((cfg) => {
       this.appConfig = cfg;
+      this.setData({ localMode: cfg.localMode !== false });  // 热更新本地模式开关
       this.checkLogin();
     });
   },
@@ -237,6 +240,18 @@ Page({
 
     // 提取记忆关键词
     this.extractMemory(content);
+
+    // 本地模式（localMode=true）→ 不连 AI，返回本地提示
+    if (this.data.localMode) {
+      const localTip = {
+        id: Date.now() + 2,
+        role: 'assistant',
+        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 当前为本地模式，暂不支持在线咨询。签诗与解签均为本地预置数据，感谢您的使用。</div>'
+      };
+      this._replaceThinking(localTip);
+      this._persistChat();
+      return;
+    }
 
     // 调用 AI
     this.callAI(content);
