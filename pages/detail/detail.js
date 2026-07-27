@@ -176,7 +176,7 @@ Page({
       const replyMsg = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 请先登录，云鹏才能记得您的故事</div>'
+        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 请先登录，阿鹏才能记得您的故事</div>'
       };
       this.setData({
         showLogin: false,
@@ -326,13 +326,13 @@ Page({
         const errMsg = {
           id: Date.now() + 1,
           role: 'assistant',
-          content: '<div style="color:#c0392b;font-size:13px;line-height:1.6;">⚠️ 云鹏暂时无法解答：' + this._escHtml(errText) + '</div>'
+          content: '<div style="color:#c0392b;font-size:13px;line-height:1.6;">⚠️ 阿鹏暂时无法解答：' + this._escHtml(errText) + '</div>'
         };
         this._replaceThinking(errMsg);
         this._persistChat();
         return;
       }
-      const reply = res.result?.content || '云鹏正在思考，请稍后再试...';
+      const reply = res.result?.content || '阿鹏正在思考，请稍后再试...';
       const aiMsg = {
         id: Date.now() + 1,
         role: 'assistant',
@@ -466,7 +466,7 @@ Page({
   /* ========== 分享 ========== */
   onShareAppMessage() {
     return {
-      title: `云鹏解绪 - 第${this.data.drawnId || ''}签`,
+      title: `阿鹏趣签 - 第${this.data.drawnId || ''}签`,
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
     };

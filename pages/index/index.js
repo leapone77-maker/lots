@@ -57,7 +57,7 @@ Page({
       family: 'SourceHanSerifSC',
       source: 'url("https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/files/noto-serif-sc-chinese-simplified-400-normal.woff")',
       desc: { weight: 'normal', style: 'normal' },
-      fail: (err) => console.warn('[云鹏解绪] 思源宋体加载失败：', err)
+      fail: (err) => console.warn('[阿鹏趣签] 思源宋体加载失败：', err)
     });
   },
 
@@ -209,7 +209,7 @@ Page({
   /* ========== 分享 ========== */
   onShareAppMessage() {
     return {
-      title: '云鹏解绪 - 心诚则灵',
+      title: '阿鹏趣签 - 心诚则灵',
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
     };
@@ -217,7 +217,7 @@ Page({
 
   onShareTimeline() {
     return {
-      title: '云鹏解绪 - 心诚则灵',
+      title: '阿鹏趣签 - 心诚则灵',
       imageUrl: '/images/jieqian-logo-peng.png'
     };
   }

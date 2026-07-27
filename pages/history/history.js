@@ -243,7 +243,7 @@ Page({
   /* ========== 分享 ========== */
   onShareAppMessage() {
     return {
-      title: '云鹏解绪 - 咨询历史',
+      title: '阿鹏趣签 - 咨询历史',
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
     };

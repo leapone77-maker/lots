@@ -2,7 +2,7 @@
   <!-- 顶部导航：标题（动态对齐胶囊） -->
   <view class="nav-bar" style="padding-top:{{navBarTop}}px">
     <view class="nav-content" style="height:{{navBarHeight}}px; line-height:{{navBarHeight}}px">
-      <text class="page-title">云鹏解绪</text>
+      <text class="page-title">阿鹏趣签</text>
     </view>
     <!-- 历史入口（紧贴标题下方） -->
     <view class="history-entry" bindtap="goHistory">

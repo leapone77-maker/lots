@@ -1,5 +1,5 @@
 /**
- * 云鹏解绪 - 微信云函数（微信原生云开发）
+ * 阿鹏趣签 - 微信云函数（微信原生云开发）
  *
  * 部署方式：
  *   1. 在微信开发者工具中，右键 cloudfunctions/jieqian → 上传并部署：云端安装依赖
@@ -13,6 +13,8 @@
  *        testMode=true 关闭每日抽签限制(测试态); loginRequired=true 要求手机号登录(记忆云端同步)
  */
 const cloud = require('wx-server-sdk')
+const fs = require('fs')
+const path = require('path')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
@@ -35,13 +37,38 @@ async function authByToken(token) {
 }
 
 /**
- * 构建 System Prompt —— 核心提示词，含记忆融合指令
+ * 身份锁定常量 —— 每次发送前校验，prompt 必须包含此身份，不可偏离
+ */
+const EXPECTED_IDENTITY = '解签大师'
+
+/**
+ * 单一来源：从 PROMPT.md 读取静态 System Prompt（身份 + 语气 + 格式要求）
+ * 修改 PROMPT.md 后需重新「上传并部署」云函数方可生效
+ */
+let BASE_PROMPT = ''
+try {
+  BASE_PROMPT = fs.readFileSync(path.join(__dirname, 'PROMPT.md'), 'utf8').trim()
+} catch (e) {
+  // 兜底：PROMPT.md 缺失时仍保证身份正确，避免以错误身份作答
+  BASE_PROMPT = '你是「解签大师」，一位隐居山林、精通易经卦象与签文的世外高人。\n你说话半文半白、温和而恳切，善于从签诗中读出求签人当下的处境与转机。'
+}
+
+/**
+ * 身份校对：最终 prompt 必须包含 EXPECTED_IDENTITY，否则拦截发送
+ */
+function verifyIdentity(prompt) {
+  if (!prompt || !prompt.includes(EXPECTED_IDENTITY)) {
+    throw new Error('身份校验失败：System Prompt 未包含「' + EXPECTED_IDENTITY + '」，已阻止发送，避免以错误身份对外作答。')
+  }
+}
+
+/**
+ * 构建 System Prompt —— 基础提示词(PROMPT.md) + 动态签文/记忆
  */
 function buildSystemPrompt(qian, memList, question) {
-  let p = '你是「云鹏解绪」，一位隐居山林、精通易经卦象与签文的世外高人。' +
-    '你说话半文半白、温和而恳切，善于从签诗中读出求签人当下的处境与转机。'
+  let p = BASE_PROMPT
 
-  // 签文信息
+  // 签文信息（动态注入）
   if (qian) {
     p += '\n\n【当前签文】'
     p += '\n签号：' + (qian.id || '?') + '　等级：' + (qian.level || '?')
@@ -56,7 +83,7 @@ function buildSystemPrompt(qian, memList, question) {
     }
   }
 
-  // 用户记忆（核心卖点！）
+  // 用户记忆（核心卖点，动态注入）
   if (memList && memList.length > 0) {
     p += '\n\n【求签人的个人背景（长期记忆）】'
     p += '\n以下是该用户过往透露的重要人生事件/状态，这是你的"独家信息"。解读时必须自然地引用这些信息来拉近距离——就像老朋友一样记得对方说过的话。'
@@ -65,14 +92,8 @@ function buildSystemPrompt(qian, memList, question) {
     memList.forEach(function(m) { p += '\n- ' + String(m) })
   }
 
-  // 输出格式要求
-  p += '\n\n【回复格式要求】'
-  p += '\n1. 开头先简要回应签意与本签核心启示（1-2句话）'
-  p += '\n2. 如果有用户记忆且与当前问题相关，在开头自然引用（如"这支签刚好呼应了你之前..."）'
-  p += '\n3. 针对用户的具体问题做分点详解（用数字编号）'
-  p += '\n4. 每个要点给出具体的时间预期、行动建议或注意事项'
-  p += '\n5. 结尾给一句温暖有力的鼓励'
-  p += '\n6. 总篇幅300-600字，层次分明，段落之间空行分隔'
+  // 身份校验：每次发送前校对，不能偏离
+  verifyIdentity(p)
 
   return p
 }
