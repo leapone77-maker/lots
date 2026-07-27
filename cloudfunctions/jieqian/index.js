@@ -9,8 +9,9 @@
  *   - users    : { _id, phone, password, token, nickname, created }
  *   - memories: { _id, uid, phone, event, cat, tag, created }
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
- *        { testMode: bool, loginRequired: bool }
+ *        { testMode: bool, loginRequired: bool, localMode: bool, promoEnabled: bool }
  *        testMode=true 关闭每日抽签限制(测试态); loginRequired=true 要求手机号登录(记忆云端同步)
+ *        localMode=true 纯本地模式(不连AI); promoEnabled=true 显示首页引流卡片(公众号+个人微信二维码)
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -259,17 +260,17 @@ exports.main = async function(event, context) {
     }
 
     // ---- 读取后台开关（热更新，无需提交小程序版本）----
-    // 集合 app_config 文档 _id='global'：{ testMode, loginRequired, localMode }
+    // 集合 app_config 文档 _id='global'：{ testMode, loginRequired, localMode, promoEnabled }
     // 首次调用自动写入默认值；集合未创建时安全回退默认值，不报错
     if (action === 'getConfig') {
-      const DEFAULTS = { testMode: false, loginRequired: false, localMode: true }
+      const DEFAULTS = { testMode: false, loginRequired: false, localMode: true, promoEnabled: false }
       try {
         const col = db.collection('app_config')
         let doc = null
         try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
         if (!doc) {
           try {
-            await col.add({ _id: 'global', testMode: false, loginRequired: false, localMode: true, updatedAt: new Date() })
+            await col.add({ _id: 'global', testMode: false, loginRequired: false, localMode: true, promoEnabled: false, updatedAt: new Date() })
           } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
           return { code: 0, config: DEFAULTS }
         }
@@ -281,7 +282,8 @@ exports.main = async function(event, context) {
             loginRequired: typeof doc.loginRequired === 'boolean'
               ? doc.loginRequired
               : (typeof doc.phoneLoginRequired === 'boolean' ? doc.phoneLoginRequired : DEFAULTS.loginRequired),
-            localMode: typeof doc.localMode === 'boolean' ? doc.localMode : DEFAULTS.localMode
+            localMode: typeof doc.localMode === 'boolean' ? doc.localMode : DEFAULTS.localMode,
+            promoEnabled: typeof doc.promoEnabled === 'boolean' ? doc.promoEnabled : DEFAULTS.promoEnabled
           }
         }
       } catch (e) {

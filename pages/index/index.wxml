@@ -49,6 +49,33 @@
     </view>
   </view>
 
+  <!-- 引流卡片区（公众号 + 个人微信），受后台 promoEnabled 开关控制 -->
+  <view class="promo-section" wx:if="{{showPromo}}">
+    <view class="promo-card">
+      <view class="promo-header">
+        <text class="promo-icon">📢</text>
+        <view class="promo-title-wrap">
+          <text class="promo-title">关注「阿鹏有礼」</text>
+          <text class="promo-title">公众号</text>
+        </view>
+      </view>
+      <image class="promo-qrcode" src="/images/qrcode-mp.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
+      <text class="promo-hint">长按识别二维码 → 关注公众号</text>
+    </view>
+    <view class="promo-divider"></view>
+    <view class="promo-card">
+      <view class="promo-header">
+        <text class="promo-icon">💬</text>
+        <view class="promo-title-wrap">
+          <text class="promo-title">添加「阿鹏」为友</text>
+          <text class="promo-title">开始更多交流</text>
+        </view>
+      </view>
+      <image class="promo-qrcode" src="/images/qrcode-wechat.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
+      <text class="promo-hint">长按识别二维码 → 添加好友</text>
+    </view>
+  </view>
+
   <!-- 底部提示 -->
   <view class="bottom-tip">
     <text>本功能纯属娱乐，结果仅供参考</text>

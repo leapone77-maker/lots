@@ -3,10 +3,11 @@
 //   - testMode           : true=关闭每日抽签限制(测试态)；false=启用每日一次(正式)
 //   - loginRequired      : true=要求手机号登录(记忆标签云端同步)；false=关闭手机号登录(记忆仅存本地)
 //   - localMode          : true=纯本地模式(不连AI、隐藏输入框/咨询入口)；false=开启AI对话(显示完整功能)
+//   - promoEnabled       : true=显示首页引流卡片(公众号+个人微信二维码)；false=隐藏引流卡片(默认)
 // 切换方式：云开发控制台改该文档字段值保存 → 下次小程序冷启动自动生效
-// 默认值（首次 getConfig 自动写入）：testMode=false, loginRequired=false, localMode=true
+// 默认值（首次 getConfig 自动写入）：testMode=false, loginRequired=false, localMode=true, promoEnabled=false
 
-const DEFAULTS = { testMode: false, loginRequired: false, localMode: true };
+const DEFAULTS = { testMode: false, loginRequired: false, localMode: true, promoEnabled: false };
 
 let _cache = null;
 
@@ -29,7 +30,8 @@ function fetchConfig() {
         loginRequired: typeof c.loginRequired === 'boolean'
           ? c.loginRequired
           : (typeof c.phoneLoginRequired === 'boolean' ? c.phoneLoginRequired : DEFAULTS.loginRequired),
-        localMode: typeof c.localMode === 'boolean' ? c.localMode : DEFAULTS.localMode
+        localMode: typeof c.localMode === 'boolean' ? c.localMode : DEFAULTS.localMode,
+        promoEnabled: typeof c.promoEnabled === 'boolean' ? c.promoEnabled : DEFAULTS.promoEnabled
       };
       _cache = cfg;
       try { wx.setStorageSync('appConfig', cfg); } catch (e) {}

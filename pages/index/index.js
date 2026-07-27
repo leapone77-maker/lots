@@ -14,17 +14,20 @@ Page({
     drawnLevel: '',
     showLogin: false,
     isLoggedIn: false,
-    userInfo: null
+    userInfo: null,
+    showPromo: false
   },
 
   onLoad() {
     this._initNavBar();
     this.initSticks();
     this.appConfig = config.getCachedConfig();
+    this.setData({ showPromo: !!this.appConfig.promoEnabled });
     this.checkDailyLimit();
     // 拉取后台开关，拿到最新值后重算（热更新）
     config.fetchConfig().then((cfg) => {
       this.appConfig = cfg;
+      this.setData({ showPromo: !!cfg.promoEnabled });
       this.checkDailyLimit();
     });
     this.checkLogin();
@@ -35,9 +38,11 @@ Page({
   // 必须在这里重算每日限制，否则 canDraw 停留在抽前状态导致可反复抽签
   onShow() {
     this.appConfig = config.getCachedConfig();
+    this.setData({ showPromo: !!this.appConfig.promoEnabled });
     this.checkDailyLimit();
     config.fetchConfig().then((cfg) => {
       this.appConfig = cfg;
+      this.setData({ showPromo: !!cfg.promoEnabled });
       this.checkDailyLimit();
     });
   },
