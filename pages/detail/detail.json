@@ -1,1 +1,1 @@
-{"navigationBarTitleText": "阿鹏趣签", "navigationStyle": "custom", "usingComponents": {"login-modal": "/components/login-modal/login-modal"}}
+{"navigationBarTitleText": "阿鹏趣签", "usingComponents": {"login-modal": "/components/login-modal/login-modal"}}
