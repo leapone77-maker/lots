@@ -12,8 +12,8 @@ Page({
     userInfo: null,
     scrollToId: '',
     _thinkingId: null,
-    _hasShownBasic: true,  // 详情页自动展示解签，标记为已展示
-    localMode: true        // 纯本地模式(默认true=不连AI、隐藏输入框)；false=开启AI对话
+    _hasShownBasic: true,  // 详情页自动展示解答，标记为已展示
+    localMode: true        // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
   },
 
   onLoad(options) {
@@ -98,7 +98,7 @@ Page({
   /* ========== 本地聊天持久化 ========== */
   loadLocalChat() {
     // 聊天记录按"抽签日期"隔离（key 含日期），新的一天/换签自动从空白会话开始，
-    // 不再把昨天的对话（含 AI 回复）载入，也不会被当成上下文发给 AI
+    // 不再把昨天的对话载入，也不会被当成上下文发送
     const key = 'detailChat_' + (this._chatDate || getBeijingDateStr());
     const saved = wx.getStorageSync(key);
     if (saved && Array.isArray(saved) && saved.length > 0) {
@@ -211,7 +211,7 @@ Page({
       return;
     }
 
-    // 已抽签 → 追加用户消息 + AI 对话
+    // 已抽签 → 追加用户消息 + 深度解读
     this.setData({
       chatMessages: [...this.data.chatMessages, userMsg],
       inputValue: '',
@@ -232,19 +232,19 @@ Page({
     // 提取记忆关键词
     this.extractMemory(content);
 
-    // 本地模式（localMode=true）→ 不连 AI，返回本地提示
+    // 本地模式（localMode=true）→ 返回本地提示
     if (this.data.localMode) {
       const localTip = {
         id: Date.now() + 2,
         role: 'assistant',
-        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 当前为本地模式，暂不支持在线咨询。签诗与解签均为本地预置数据，感谢您的使用。</div>'
+        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 当前为本地模式，暂不支持在线咨询。签诗与解答均为本地预置数据，感谢您的使用。</div>'
       };
       this._replaceThinking(localTip);
       this._persistChat();
       return;
     }
 
-    // 调用 AI
+    // 调用深度解读
     this.callAI(content);
   },
 
@@ -282,7 +282,7 @@ Page({
     });
   },
 
-  /* ========== AI 深度解读 ========== */
+  /* ========== 深度解读 ========== */
   callAI(userQuestion) {
     const memories = this.getAIMemory();
     const qianInfo = this.data.hasDrawn ? {
@@ -343,9 +343,9 @@ Page({
     });
   },
 
-  /* ========== 格式化 AI 回复为 HTML ========== */
+  /* ========== 格式化解读回复为 HTML ========== */
   formatAIReply(text) {
-    // 先清洗：去掉 AI 可能原样引用的 HTML 标签残留 + Markdown 标记
+    // 先清洗：去掉可能原样引用的 HTML 标签残留 + Markdown 标记
     let cleaned = text
       // 去掉完整的 HTML 标签行（如 <div style="..."> 、</div> 等）
       .replace(/<\/?(div|span|p|br|section|article|strong|em|b|i|u|h[1-6]|ul|ol|li|blockquote|pre|code)\b[^>]*>/gi, '')
@@ -439,7 +439,7 @@ Page({
       .replace(/"/g, '&quot;');
   },
 
-  /* 去除 HTML 标签，提取纯文本（发给 AI 时用） */
+  /* 去除 HTML 标签，提取纯文本（发送解读时用） */
   _stripHtml(html) {
     if (!html) return '';
     return String(html)

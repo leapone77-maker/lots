@@ -14,7 +14,7 @@
 | 需要 npm 编译 | 是（几百个包） | **否** |
 | 代码文件 | .vue | .wxml / .wxss / .js / .json |
 
-两个版本**功能完全一样**：抽签动画、AI 解签、手机号登录、长期记忆、微信云开发后端。
+两个版本**功能完全一样**：抽签动画、解答、手机号登录、长期记忆、微信云开发后端。
 
 ---
 
@@ -68,13 +68,15 @@
    > `node_modules` 已经在文件夹里了（我帮你装好的），上传会直接带上。
 3. 部署完成后，云开发控制台 → 云函数 里能看到 `jieqian`
 
-### 设置智谱 API Key（环境变量）
+### 设置远程解读服务密钥（环境变量）
 
 1. 云开发控制台 → 云函数 → 点 `jieqian` → 编辑
 2. 环境变量 → 添加：
    | 变量名 | 值 |
    |--------|-----|
-   | `ZHIPU_KEY` | `dbc2baa0a8744885bc95d68315fd83fd.9R5ec8jBo73vFvt4` |
+   | `INTERP_KEY` | `<在云开发控制台配置，请勿将明文写入文档>` |
+   | `INTERP_API`  | `https://open.bigmodel.cn/api/paas/v4/chat/completions`（必填，全部配置取自后台） |
+   | `INTERP_MODEL` | `glm-4-flash`（必填，全部配置取自后台） |
 3. 保存（自动重新部署）
 
 ---
@@ -85,9 +87,9 @@
 2. 模拟器里应显示「阿鹏趣签」首页
 3. 测试流程：
    - 点签筒或「诚心求签」→ 摇签动画 → 显示签文
-   - 点「请阿鹏解读」→ 跳到解签页
+   - 点「请阿鹏解读」→ 跳到解答页
    - 点登录提示条 → 弹登录框 → 手机号+密码（首次自动注册）
-   - 输入问题 → 等 AI 返回古风解读
+   - 输入问题 → 等返回古风解读
 4. **真机预览**：点「预览」→ 手机微信扫码 → 真实环境验证「不挂 VPN」
 
 ---
@@ -98,7 +100,7 @@
 |------|------|------|
 | 编译报错 `xxx is not defined` | app.js 环境ID没填 | 第3步填真实环境ID |
 | 登录报 `数据库权限不足` | 集合权限不对 | 第4步设为「仅创建者可读写」 |
-| AI 解签返回错误 | 没设 ZHIPU_KEY 或Key失效 | 第5步设环境变量 |
+| 解答返回错误 | 没设 INTERP_KEY 或Key失效 | 第5步设环境变量 |
 | 云函数报 `wx-server-sdk 不存在` | 上传时没带 node_modules | 确认 `cloudfunctions/jieqian/node_modules` 存在再上传 |
 | 提示需配置合法域名 | 云开发不需要 | 确认 `project.config.json` 里 `urlCheck:false` 已设 |
 
@@ -108,13 +110,13 @@
 
 ```
 jieqian-native/
-├── app.js / app.json / app.wxss     ← 小程序入口+全局配置（tabBar：抽签/解签）
+├── app.js / app.json / app.wxss     ← 小程序入口+全局配置（tabBar：抽签/解答）
 ├── project.config.json              ← 改这里填 AppID
 ├── sitemap.json
 │
 ├── pages/
 │   ├── index/   (抽签页: 摇签动画+签结果)
-│   └── chat/    (解签页: AI对话+记忆上下文)
+│   └── chat/    (解答页: 解读+记忆上下文)
 │
 ├── components/
 │   └── login-modal/   (手机号+密码登录弹窗, 自动注册)

@@ -2,8 +2,12 @@
  * 阿鹏趣签 - 微信云函数（微信原生云开发）
  *
  * 部署方式：
- *   1. 在微信开发者工具中，右键 cloudfunctions/jieqian → 上传并部署：云端安装依赖
- *   2. 环境变量 ZHIPU_KEY 在 云开发控制台 → 云函数 → jieqian → 编辑 → 环境变量 中设置
+ *   1. 本地修改 PROMPT.md 后，在微信开发者工具中，右键 cloudfunctions/jieqian → 上传并部署：云端安装依赖
+ *   2. 在云开发控制台 → 云函数 → jieqian → 版本与配置 → 配置 → 环境变量 中设置：
+ *        INTERP_KEY    （远程解读服务密钥，不内置明文）
+ *        INTERP_API    （必填）解读服务接口地址
+ *        INTERP_MODEL  （必填）所用模型名
+ *     注：接口地址与模型名全部取自环境变量，代码中不内置任何供应商/模型关键词。
  *
  * 数据库集合（需在云开发控制台手动创建）：
  *   - users    : { _id, phone, password, token, nickname, created }
@@ -11,7 +15,7 @@
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
  *        { testMode: bool, loginRequired: bool, localMode: bool, promoEnabled: bool }
  *        testMode=true 关闭每日抽签限制(测试态); loginRequired=true 要求手机号登录(记忆云端同步)
- *        localMode=true 纯本地模式(不连AI); promoEnabled=true 显示首页引流卡片(公众号+个人微信二维码)
+ *        localMode=true 纯本地模式(不连远程解读); promoEnabled=true 显示首页引流卡片(公众号+个人微信二维码)
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -22,9 +26,8 @@ const db = cloud.database()
 const users = db.collection('users')
 const memories = db.collection('memories')
 
-// 智谱 GLM-4-Flash 密钥
-// 优先读环境变量（云开发控制台设置），否则用内置 key
-const ZHIPU_KEY = process.env.ZHIPU_KEY || 'dbc2baa0a8744885bc95d68315fd83fd.9R5ec8jBo73vFvt4'
+// 远程解读服务密钥（在云开发控制台以环境变量 INTERP_KEY 配置，不内置明文，不在代码中体现供应商名）
+const INTERP_KEY = process.env.INTERP_KEY || ''
 
 function genToken() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
@@ -100,18 +103,23 @@ function buildSystemPrompt(qian, memList, question) {
 }
 
 /**
- * 调用智谱 GLM-4-Flash API
+ * 调用远程解读服务
  */
-async function callZhipu(systemContent, userQuestion, chatHistory) {
+async function callInterp(systemContent, userQuestion, chatHistory) {
   const https = require('https')
-  const url = new URL('https://open.bigmodel.cn/api/paas/v4/chat/completions')
+  // 接口地址与模型均取自云函数环境变量，不在代码中内置任何供应商/模型名
+  const apiUrl = process.env.INTERP_API
+  const apiModel = process.env.INTERP_MODEL
+  if (!apiUrl) throw new Error('未配置解读服务地址：请在云函数环境变量中设置 INTERP_API')
+  if (!apiModel) throw new Error('未配置解读模型名：请在云函数环境变量中设置 INTERP_MODEL')
+  const url = new URL(apiUrl)
 
   // 构建消息数组：system + 历史对话(如果有) + 当前问题
   const msgs = [
     { role: 'system', content: systemContent }
   ]
 
-  // 追加最近的聊天历史（让AI理解上下文）
+  // 追加最近的聊天历史（保持上下文连贯）
   if (Array.isArray(chatHistory)) {
     chatHistory.forEach(function(m) {
       msgs.push({ role: m.role || 'user', content: m.content || '' })
@@ -122,7 +130,7 @@ async function callZhipu(systemContent, userQuestion, chatHistory) {
   msgs.push({ role: 'user', content: userQuestion })
 
   const body = JSON.stringify({
-    model: 'glm-4-flash',
+    model: apiModel,
     messages: msgs,
     temperature: 0.85,
     max_tokens: 1000
@@ -135,7 +143,7 @@ async function callZhipu(systemContent, userQuestion, chatHistory) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + ZHIPU_KEY,
+        'Authorization': 'Bearer ' + INTERP_KEY,
         'Content-Length': Buffer.byteLength(body)
       }
     }, function(res) {
@@ -145,12 +153,12 @@ async function callZhipu(systemContent, userQuestion, chatHistory) {
         try {
           var json = JSON.parse(data)
           if (!json || !json.choices || !json.choices[0]) {
-            reject(new Error('智谱返回异常：' + data.slice(0, 200)))
+            reject(new Error('远程解读服务返回异常：' + data.slice(0, 200)))
             return
           }
           resolve(json.choices[0].message.content)
         } catch(e) {
-          reject(new Error('智谱响应解析失败：' + data.slice(0, 200)))
+          reject(new Error('远程解读服务响应解析失败：' + data.slice(0, 200)))
         }
       })
     })
@@ -233,7 +241,7 @@ exports.main = async function(event, context) {
       return { code: 0, memories: list }
     }
 
-    // ---- AI 解签对话 ----
+    // ---- 深度解读对话 ----
     if (action === 'chat') {
       var qian = event.currentQian || null       // 当前签文对象
       var memList = event.memories || []         // 记忆文本数组
@@ -245,8 +253,8 @@ exports.main = async function(event, context) {
       // 构建带记忆的 system prompt
       var systemPrompt = buildSystemPrompt(qian, memList, question)
 
-      // 调用智谱
-      var reply = await callZhipu(systemPrompt, question, history)
+      // 调用远程解读服务
+      var reply = await callInterp(systemPrompt, question, history)
 
       return { code: 0, content: reply }
     }

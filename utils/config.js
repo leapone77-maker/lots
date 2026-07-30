@@ -2,7 +2,7 @@
 // 后台位置：微信云开发「数据库」集合 app_config，文档 _id=global
 //   - testMode           : true=关闭每日抽签限制(测试态)；false=启用每日一次(正式)
 //   - loginRequired      : true=要求手机号登录(记忆标签云端同步)；false=关闭手机号登录(记忆仅存本地)
-//   - localMode          : true=纯本地模式(不连AI、隐藏输入框/咨询入口)；false=开启AI对话(显示完整功能)
+//   - localMode          : true=纯本地模式(隐藏输入框/咨询入口)；false=开启深度解读(显示完整功能)
 //   - promoEnabled       : true=显示首页引流卡片(公众号+个人微信二维码)；false=隐藏引流卡片(默认)
 // 切换方式：云开发控制台改该文档字段值保存 → 下次小程序冷启动自动生效
 // 默认值（首次 getConfig 自动写入）：testMode=false, loginRequired=false, localMode=true, promoEnabled=false
