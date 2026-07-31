@@ -1,3 +1,5 @@
+const QIAN_DB = require('../../utils/qianData.js')
+
 Page({
   data: {
     // 统计数据
@@ -43,9 +45,30 @@ Page({
 
   /* ========== 加载历史记录 + 统计 + 筛选 ========== */
   _loadHistory() {
-    const records = wx.getStorageSync('drawHistory') || [];
+    const localRecords = wx.getStorageSync('drawHistory') || [];
+    const userInfo = wx.getStorageSync('userInfo');
+    const token = userInfo ? userInfo.token : '';
+    if (token) {
+      // 已登录：优先从云端拉取（跨设备一致），失败回退本地
+      wx.cloud.callFunction({
+        name: 'jieqian',
+        data: { action: 'getHistory', token }
+      }).then(res => {
+        if (res.result && res.result.code === 0) {
+          this._applyCloud(res.result.draws || {}, res.result.chats || {}, localRecords);
+        } else {
+          this._applyLocal(localRecords);
+        }
+      }).catch(() => this._applyLocal(localRecords));
+    } else {
+      // 未登录：仅本地
+      this._applyLocal(localRecords);
+    }
+  },
 
-    // 统计
+  /* ========== 仅本地记录（未登录 / 云端异常回退）========== */
+  _applyLocal(records) {
+    this._cloudChats = {};
     let shang = 0, zhong = 0, xia = 0;
     records.forEach(r => {
       const lv = (r.level || '').trim();
@@ -53,13 +76,49 @@ Page({
       else if (lv.includes('中')) zhong++;
       else if (lv.includes('下')) xia++;
     });
-
     this.setData({
       allRecords: records,
       stats: { total: records.length, shang, zhong, xia }
     });
+    this._filterByDate(this.data.selectedDate);
+    this._buildCalendar(this.data.year, this.data.month);
+  },
 
-    // 按选中日期筛选 + 重建日历标记
+  /* ========== 云端记录（已登录）：draws 转记录 + 合并本地 ========== */
+  _applyCloud(draws, chats, localRecords) {
+    this._cloudChats = chats || {};
+    const map = {};
+    // 云端签号（优先，用本地 QIAN_DB 补 level/basic/poem）
+    Object.keys(draws).forEach(date => {
+      const sign = draws[date];
+      if (!sign) return;
+      const q = QIAN_DB.find(x => x.id === sign);
+      map[date] = {
+        date,
+        time: '',
+        id: sign,
+        level: q ? q.level : '未知',
+        poemTitle: (q && q.poem && q.poem[0]) ? q.poem[0] : ('第' + sign + '签'),
+        basic: q ? q.basic : null
+      };
+    });
+    // 本地抽签记录（补齐云端没有的日期，避免换设备前数据丢失）
+    localRecords.forEach(r => {
+      const d = r.date ? r.date.slice(0, 10) : '';
+      if (d && !map[d]) map[d] = r;
+    });
+    const records = Object.keys(map).sort((a, b) => b.localeCompare(a)).map(d => map[d]);
+    let shang = 0, zhong = 0, xia = 0;
+    records.forEach(r => {
+      const lv = (r.level || '').trim();
+      if (lv.includes('上')) shang++;
+      else if (lv.includes('中')) zhong++;
+      else if (lv.includes('下')) xia++;
+    });
+    this.setData({
+      allRecords: records,
+      stats: { total: records.length, shang, zhong, xia }
+    });
     this._filterByDate(this.data.selectedDate);
     this._buildCalendar(this.data.year, this.data.month);
   },
@@ -71,11 +130,16 @@ Page({
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    // 获取当月有记录的日期集合
+    // 获取当月有记录的日期集合（抽签 + 聊天都标记）
     const recordDates = new Set();
     this.data.allRecords.forEach(r => {
       if (r.date) recordDates.add(r.date.slice(0, 10));
     });
+    if (this._cloudChats) {
+      Object.keys(this._cloudChats).forEach(d => {
+        if (this._cloudChats[d] && this._cloudChats[d].length) recordDates.add(d);
+      });
+    }
 
     const days = [];
     // 上月填充
@@ -178,6 +242,7 @@ Page({
       success: (res) => {
         if (res.confirm) {
           wx.removeStorageSync('drawHistory');
+          this._cloudChats = {};
           this.setData({
             allRecords: [],
             filteredRecords: [],
@@ -190,15 +255,16 @@ Page({
     });
   },
 
-  /* ========== 点击某条记录 → 跳转详情页 ========== */
+  /* ========== 点击某条记录 → 跳转详情页（带日期，详情页加载当天聊天）========== */
   onRecordTap(e) {
     const idx = e.currentTarget.dataset.index;
     const record = this.data.filteredRecords[idx];
     if (!record) return;
 
     // 将该次签的数据写入缓存，跳转到详情页查看
+    const dateStr = record.date ? record.date.slice(0, 10) : '';
     wx.setStorageSync('cachedQian', {
-      date: record.date ? record.date.slice(0, 10) : '',
+      date: dateStr,
       id: record.id,
       level: record.level,
       poemText: '',
@@ -207,7 +273,7 @@ Page({
       keywords: []
     });
     wx.navigateTo({
-      url: `/pages/detail/detail?id=${record.id}&level=${encodeURIComponent(record.level || '')}`
+      url: `/pages/detail/detail?id=${record.id}&level=${encodeURIComponent(record.level || '')}&date=${encodeURIComponent(dateStr)}`
     });
   },
 

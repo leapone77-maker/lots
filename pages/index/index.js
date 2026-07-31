@@ -104,9 +104,16 @@ Page({
     this.setData({ canDraw: lastDate !== todayStr || !cachedQian });
   },
 
-  /* ========== 跳转历史页 ========== */
+  /* ========== 跳转历史页（localMode=false 时需登录）========== */
   goHistory() {
-    wx.navigateTo({ url: '/pages/history/history' });
+    // 本地模式或已登录 → 直接跳转
+    if (this.data.localMode || this.data.isLoggedIn) {
+      wx.navigateTo({ url: '/pages/history/history' });
+      return;
+    }
+    // 未登录 → 弹登录框，记录待执行动作
+    this._pendingNav = '/pages/history/history';
+    this.setData({ showLogin: true });
   },
 
   /* ========== 抽签主流程（动画 → 跳转详情页）========== */
@@ -159,6 +166,14 @@ Page({
         this._saveMemory(`抽到第${qian.id}签 ${qian.level}`);
       }
 
+      // 已登录则把当日签号同步云端（供历史页跨设备展示）
+      if (this.data.isLoggedIn && this.data.userInfo && this.data.userInfo.token) {
+        wx.cloud.callFunction({
+          name: 'jieqian',
+          data: { action: 'recordDraw', token: this.data.userInfo.token, date: todayStr, sign: qian.id }
+        }).catch(() => {});
+      }
+
       this.setData({
         isFlying: false,
         floatingSign: true,
@@ -205,6 +220,13 @@ Page({
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     wx.showToast({ title: '登录成功', icon: 'success' });
+
+    // 登录前触发的待执行动作（如点"历史"弹框）
+    if (this._pendingNav) {
+      const url = this._pendingNav;
+      this._pendingNav = null;
+      setTimeout(() => wx.navigateTo({ url }), 400);
+    }
   },
 
   onCloseLogin() {

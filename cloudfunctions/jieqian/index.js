@@ -418,6 +418,49 @@ exports.main = async function(event, context) {
       return { code: 0, config: await readConfig() }
     }
 
+    // ---- 写入当日签号到 users.draws[date]，供历史页跨设备展示 ----
+    // draws 结构：{ "2026-07-31": 657, ... }，value=签号(1-666)，无 key 或 0 表示当天没抽
+    if (action === 'recordDraw') {
+      const token = event.token || ''
+      const date = event.date || ''          // 形如 "2026-07-31"
+      const sign = event.sign                // 签号（数字）
+      if (!date || !sign) return { code: 1, msg: '参数缺失' }
+      const caller = await authByToken(token)
+      if (!caller) return { code: 401, msg: '请先登录' }
+      await users.doc(caller._id).update({ data: { ['draws.' + date]: sign } })
+      console.log('[recordDraw] phone=' + caller.phone + ' date=' + date + ' sign=' + sign)
+      return { code: 0, ok: true }
+    }
+
+    // ---- 追加当日聊天记录到 users.chats[date]（数组 push，性能好）----
+    // chats 结构：{ "2026-07-31": [ {role, content, t}, ... ] }
+    if (action === 'recordChat') {
+      const token = event.token || ''
+      const date = event.date || ''
+      const msgs = event.messages || []
+      if (!date || !Array.isArray(msgs) || msgs.length === 0) return { code: 1, msg: '参数缺失' }
+      const caller = await authByToken(token)
+      if (!caller) return { code: 401, msg: '请先登录' }
+      const _ = db.command
+      await users.doc(caller._id).update({
+        data: { ['chats.' + date]: _.push({ each: msgs }) }
+      })
+      console.log('[recordChat] phone=' + caller.phone + ' date=' + date + ' count=' + msgs.length)
+      return { code: 0, ok: true }
+    }
+
+    // ---- 读取历史（签号 + 聊天），登录用户跨设备展示 ----
+    if (action === 'getHistory') {
+      const token = event.token || ''
+      const caller = await authByToken(token)
+      if (!caller) return { code: 401, draws: {}, chats: {} }
+      return {
+        code: 0,
+        draws: (caller.draws) || {},
+        chats: (caller.chats) || {}
+      }
+    }
+
     return { code: 1, msg: '未知操作：' + action }
   } catch (e) {
     console.error('[jieqian] error:', e)

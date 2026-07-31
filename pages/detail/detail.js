@@ -20,6 +20,9 @@ Page({
   onLoad(options) {
     // 从缓存读取今日签数据（首页抽签时已存入）
     const cachedQian = wx.getStorageSync('cachedQian');
+    // 历史页传入的日期（点记录跳转时带过来）
+    const historyDate = options && options.date ? decodeURIComponent(options.date) : '';
+
     if (cachedQian) {
       this.setData({
         qian: cachedQian,
@@ -30,7 +33,7 @@ Page({
         drawnBasic: cachedQian.basic
       });
       // 聊天记录按"抽签日期"隔离：同一天的签共享同一段对话，跨天/换签则开新会话
-      this._chatDate = cachedQian.date || getBeijingDateStr();
+      this._chatDate = historyDate || cachedQian.date || getBeijingDateStr();
     } else if (options && options.id) {
       // 兜底：从参数构建（仅基本信息）
       this.setData({
@@ -44,6 +47,7 @@ Page({
         drawnId: options.id,
         drawnLevel: decodeURIComponent(options.level || '未知')
       });
+      this._chatDate = historyDate || getBeijingDateStr();
     }
 
     this.appConfig = config.getCachedConfig();
@@ -52,11 +56,20 @@ Page({
     this.loadLocalChat();
     this._loadSerifFont();
 
+    // 从历史页进入 → 尝试加载当天云端聊天记录
+    if (historyDate && this.data.isLoggedIn) {
+      this._loadCloudChat(historyDate);
+    }
+
     // 拉取后台开关，拿到最新值后用最新开关重算登录态（热更新）
     config.fetchConfig().then((cfg) => {
       this.appConfig = cfg;
       this.setData({ localMode: cfg.localMode !== false });  // 热更新本地模式开关
       this.checkLogin();
+      // 热更新后如果刚登录且有历史日期，补拉聊天
+      if (historyDate && this.data.isLoggedIn && this.data.chatMessages.length === 0) {
+        this._loadCloudChat(historyDate);
+      }
     });
   },
 
@@ -176,8 +189,20 @@ Page({
     if (this._pendingQuestion) {
       const q = this._pendingQuestion;
       this._pendingQuestion = null;
-      // 登录前缓存的问题：登录成功后补做记忆提取（否则这条消息不会进 memories 表）
+      // 登录前缓存的问题：先追加用户消息到聊天窗口，再补做记忆提取 + AI 解读
+      const pendingMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: '<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(q) + '</div>'
+      };
+      this.setData({
+        chatMessages: [...this.data.chatMessages, pendingMsg],
+        scrollToId: `msg-${pendingMsg.id}`
+      });
+      this._persistChat();
       this.extractMemory(q);
+      this._pendingUserText = q;  // 云端聊天记录用
+      this._showThinking();       // 显示"思考中"动画
       setTimeout(() => this.callInterp(q), 300);
     }
   },
@@ -252,6 +277,7 @@ Page({
       scrollToId: `msg-${userMsg.id}`
     });
     this._persistChat();
+    this._pendingUserText = content;  // 暂存纯文本，供云端聊天记录使用
 
     // 显示"思考中"
     this._showThinking();
@@ -363,6 +389,8 @@ Page({
       if (typeof res.result?.remain === 'number') {
         this.setData({ remainCount: res.result.remain });
       }
+      // 云端记录当日聊天（仅登录且非本地模式）
+      this._recordCloudChat(reply);
     }).catch(err => {
       console.error('[callInterp] error:', err);
       const errMsg = {
@@ -373,6 +401,50 @@ Page({
       this._replaceThinking(errMsg);
       this._persistChat();
     });
+  },
+
+  /* ========== 云端记录当日聊天（登录 + 非本地模式才写）========== */
+  _recordCloudChat(reply) {
+    const token = this.data.userInfo ? this.data.userInfo.token : ''
+    if (!token || this.data.localMode) return
+    const userText = this._stripHtml(this._pendingUserText || '')
+    this._pendingUserText = null
+    const aiText = this._stripHtml(typeof reply === 'string' ? reply : '')
+    if (!userText && !aiText) return
+    const now = new Date()
+    const pad = (n) => (n < 10 ? '0' + n : '' + n)
+    const t = pad(now.getHours()) + ':' + pad(now.getMinutes())
+    const msgs = []
+    if (userText) msgs.push({ role: 'user', content: userText, t })
+    if (aiText) msgs.push({ role: 'assistant', content: aiText, t })
+    wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'recordChat', token, date: this._chatDate, messages: msgs }
+    }).catch(() => {})
+  },
+
+  /* ========== 从云端加载某天的聊天记录（历史页点进来时用）========== */
+  _loadCloudChat(dateStr) {
+    const token = this.data.userInfo ? this.data.userInfo.token : ''
+    if (!token || this.data.localMode) return
+    wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'getHistory', token, date: dateStr }
+    }).then(res => {
+      if (!res.result || res.result.code !== 0) return
+      const chats = res.result.chats && res.result.chats[dateStr]
+      if (!chats || chats.length === 0) return
+      // 将云端消息转为聊天窗口格式
+      const msgs = chats.map((m, i) => ({
+        id: Date.now() + i,
+        role: m.role,
+        content: '<div style="color:' + (m.role === 'user' ? '#4a3728' : '#333333') + ';font-size:14px;line-height:1.6;">' + this._escHtml(m.content) + '</div>'
+      }))
+      this.setData({
+        chatMessages: msgs,
+        scrollToId: `msg-${msgs[msgs.length - 1].id}`
+      })
+    }).catch(() => {})
   },
 
   /* ========== 格式化解读回复为 HTML ========== */
