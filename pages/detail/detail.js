@@ -13,7 +13,8 @@ Page({
     scrollToId: '',
     _thinkingId: null,
     _hasShownBasic: true,  // 详情页自动展示解答，标记为已展示
-    localMode: true        // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
+    localMode: true,       // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
+    remainCount: null      // 当日剩余咨询次数（null=不适用/未登录/本地模式）
   },
 
   onLoad(options) {
@@ -123,6 +124,7 @@ Page({
       // 已登录（有账号 token）：使用云端记忆同步
       this.setData({ isLoggedIn: true, userInfo });
       this.loadMemories();
+      this.fetchQuota();
     } else if (cfg.loginRequired === false) {
       // 后台已关闭手机号登录：视为已登录（仅本地记忆），不弹登录框、不强制登录
       this.setData({ isLoggedIn: true });
@@ -130,13 +132,35 @@ Page({
   },
 
   loadMemories() {
+    const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
+    const token = userInfo.token || '';
     wx.cloud.callFunction({
       name: 'jieqian',
-      data: { action: 'getMemories' }
+      data: { action: 'getMemories', token: token }
     }).then(res => {
       const memories = res.result?.memories || [];
       wx.setStorageSync('userMemories', memories);
-    }).catch(() => {});
+      console.log('[loadMemories] 拉取到', memories.length, '条记忆');
+    }).catch((err) => { console.error('[loadMemories] 失败', err); });
+  },
+
+  // 拉取当日剩余咨询次数（仅登录账号 + 云端模式有效）
+  fetchQuota() {
+    const token = this.data.userInfo && this.data.userInfo.token
+    if (!token || this.data.localMode) {
+      this.setData({ remainCount: null })
+      return
+    }
+    wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'getQuota', token: token }
+    }).then(res => {
+      if (res.result && res.result.code === 0 && typeof res.result.remain === 'number') {
+        this.setData({ remainCount: res.result.remain })
+      } else {
+        this.setData({ remainCount: null })
+      }
+    }).catch(() => { this.setData({ remainCount: null }) })
   },
 
   onLogin(e) {
@@ -146,12 +170,15 @@ Page({
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     this.loadMemories();
+    this.fetchQuota();
     wx.showToast({ title: '登录成功', icon: 'success' });
 
     if (this._pendingQuestion) {
       const q = this._pendingQuestion;
       this._pendingQuestion = null;
-      setTimeout(() => this.callAI(q), 300);
+      // 登录前缓存的问题：登录成功后补做记忆提取（否则这条消息不会进 memories 表）
+      this.extractMemory(q);
+      setTimeout(() => this.callInterp(q), 300);
     }
   },
 
@@ -245,7 +272,7 @@ Page({
     }
 
     // 调用深度解读
-    this.callAI(content);
+    this.callInterp(content);
   },
 
   /* ========== "思考中"气泡 ========== */
@@ -283,8 +310,8 @@ Page({
   },
 
   /* ========== 深度解读 ========== */
-  callAI(userQuestion) {
-    const memories = this.getAIMemory();
+  callInterp(userQuestion) {
+    const memories = this.getInterpMemory();
     const qianInfo = this.data.hasDrawn ? {
       id: this.data.drawnId,
       level: this.data.drawnLevel,
@@ -306,6 +333,7 @@ Page({
       name: 'jieqian',
       data: {
         action: 'chat',
+        token: this.data.userInfo ? this.data.userInfo.token : '',
         messages: recentMsgs,
         question: finalQuestion,
         memories: memories,
@@ -324,15 +352,19 @@ Page({
         return;
       }
       const reply = res.result?.content || '阿鹏正在思考，请稍后再试...';
-      const aiMsg = {
+      const interpMsg = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: this.formatAIReply(reply)
+        content: this.formatReply(reply)
       };
-      this._replaceThinking(aiMsg);
+      this._replaceThinking(interpMsg);
       this._persistChat();
+      // 更新当日剩余咨询次数
+      if (typeof res.result?.remain === 'number') {
+        this.setData({ remainCount: res.result.remain });
+      }
     }).catch(err => {
-      console.error('[callAI] error:', err);
+      console.error('[callInterp] error:', err);
       const errMsg = {
         id: Date.now() + 1,
         role: 'assistant',
@@ -344,9 +376,11 @@ Page({
   },
 
   /* ========== 格式化解读回复为 HTML ========== */
-  formatAIReply(text) {
-    // 先清洗：去掉可能原样引用的 HTML 标签残留 + Markdown 标记
+  formatReply(text) {
+    // 先清洗：去掉解读角色自报身份前缀（含方括号变体）+ 问候语
     let cleaned = text
+      .replace(/^(?:【?解签大师?】?|【?阿鹏趣签?】?|【?解读?】?|【?解答?】?)[：:，,\s]*/i, '')
+      .replace(/^(?:您好|你好|福主您好|福主你好)[，,。.\s]*/i, '')
       // 去掉完整的 HTML 标签行（如 <div style="..."> 、</div> 等）
       .replace(/<\/?(div|span|p|br|section|article|strong|em|b|i|u|h[1-6]|ul|ol|li|blockquote|pre|code)\b[^>]*>/gi, '')
       // 去掉 Markdown 加粗 **text**
@@ -378,23 +412,45 @@ Page({
 
   /* ========== 记忆系统 ========== */
   extractMemory(text) {
-    const keywords = {
-      love: [/失恋|分手|离婚|单身|恋爱|结婚|表白|前任|对象|伴侣|暧昧|相亲|订婚|领证/],
-      career: [/升职|跳槽|辞职|失业|面试|入职|转正|加薪|降薪|裁员|创业|老板|同事|领导/],
-      wealth: [/投资|理财|股票|基金|买房|买车|贷款|欠债|存款|奖金|分红|彩票/],
-      health: [/生病|住院|手术|体检|失眠|焦虑|抑郁|减肥|健身|养生|感冒|发烧/],
-      life: [/搬家|出国|留学|考研|考公|本命年|搬家|乔迁|毕业/]
-    };
+    if (!text || typeof text !== 'string') return;
+
+    const now = new Date();
+    const year = now.getFullYear();          // 当前年份，如 2026
+    const yearStr = year.toString();
+
+    // 带上下文提取规则：每个条目 [正则, 分类, 标签生成函数]
+    const rules = [
+      // 本命年（捕获年份前缀：今年/202x年/本命年）
+      { re: /(\d{4})?年?本命年/, cat: 'life', fmt: (m) => ((m[1] || yearStr) + '年本命年') },
+      { re: /今年本命年/, cat: 'life', fmt: () => (yearStr + '年本命年') },
+      // 感情
+      { re: /(刚|最近|正在)?(失恋|分手|离婚)/, cat: 'love', fmt: (m) => (m[0]) },
+      { re: /(想|准备|计划)?(结婚|领证|订婚)/, cat: 'love', fmt: (m) => (m[0]) },
+      { re: /单身/, cat: 'love', fmt: () => ('单身') },
+      { re: /(在谈|有|找|想找|相亲)?(对象|男友|女友|伴侣|另一半)/, cat: 'love', fmt: (m) => (m.filter(Boolean).join('')) },
+      // 事业
+      { re: /(想|准备|打算|正在)?(升职|跳槽|辞职|创业|转正|面试|入职)/, cat: 'career', fmt: (m) => (m.filter(Boolean).join('')) },
+      { re: /(被|遭)?(裁员|降薪|失业|欠薪)/, cat: 'career', fmt: (m) => (m[0]) },
+      { re: /考研|考公|考编|出国|留学|毕业|乔迁|搬家/, cat: 'life', fmt: (m) => (m[0]) },
+      // 财富
+      { re: /(想|准备|打算)?(投资|理财|买房|买车|买基金|买股票)/, cat: 'wealth', fmt: (m) => (m.filter(Boolean).join('')) },
+      { re: /(有|背)?(贷款|欠债|债务)/, cat: 'wealth', fmt: (m) => (m.filter(Boolean).join('')) },
+      // 健康
+      { re: /(长期|经常|严重)?(失眠|焦虑|抑郁|脱发)/, cat: 'health', fmt: (m) => (m.filter(Boolean).join('')) },
+      { re: /(做过|要做|准备做)?(手术|体检)/, cat: 'health', fmt: (m) => (m.filter(Boolean).join('')) },
+    ];
 
     const extracted = [];
-    Object.keys(keywords).forEach(cat => {
-      keywords[cat].forEach(re => {
-        const match = text.match(re);
-        if (match) {
-          extracted.push({ tag: match[0], cat: cat, time: new Date().toISOString() });
-        }
-      });
+    rules.forEach(rule => {
+      const match = text.match(rule.re);
+      if (match) {
+        const tag = rule.fmt(match);
+        if (tag) extracted.push({ tag, cat: rule.cat, time: now.toISOString() });
+      }
     });
+
+    console.log('[extractMemory] 输入:', text.slice(0, 40), '→ 提取到:', extracted.length > 0 ? extracted.map(e => e.tag).join(', ') : '(无)');
+    console.log('[extractMemory] loginRequired=', this.appConfig?.loginRequired, 'isLoggedIn=', this.data.isLoggedIn, 'hasToken=', !!((this.data.userInfo || wx.getStorageSync('userInfo') || {}).token));
 
     if (extracted.length > 0) {
       // 记忆标签永远写入本地（关闭登录时仅本地，无需跨设备同步）
@@ -402,15 +458,19 @@ Page({
       localMemories.push(...extracted.map(e => `${e.time.slice(0,10)} ${e.tag}`));
       wx.setStorageSync('localMemories', localMemories.slice(-30));
 
-      // 仅当后台开启"手机号登录"(loginRequired=true)时才上报云端，实现跨设备同步
-      if (this.appConfig.loginRequired && this.data.isLoggedIn) {
-        const memoryText = extracted.map(e => `[${e.cat}] ${e.tag}`).join(', ');
-        this._saveMemory(memoryText);
+      // 只要用户已登录（有token），就同步到云端实现跨设备/多端一致
+      // 注意：loginRequired 控制"是否强制弹登录框"，不控制"已登录用户是否可同步"
+      const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
+      if (userInfo.token) {
+        console.log('[saveMemory] 准备保存到云端:', extracted.map(e => e.tag).join(', '));
+        this._saveMemory(extracted);
+      } else {
+        console.log('[saveMemory] 用户未登录，跳过云端保存（仅本地）');
       }
     }
   },
 
-  getAIMemory() {
+  getInterpMemory() {
     const cfg = this.appConfig || config.getCachedConfig();
     // 开启手机号登录 → 云端记忆(已同步) + 本地兜底；关闭 → 仅本地记忆
     const cloudMemories = cfg.loginRequired ? (wx.getStorageSync('userMemories') || []) : [];
@@ -422,11 +482,28 @@ Page({
       unique.map(m => `- ${m}`).join('\n');
   },
 
-  _saveMemory(content) {
+  _saveMemory(extracted) {
+    // extracted: [{ tag, cat }, ...]  来自 extractMemory 的提取结果
+    const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
+    const token = userInfo.token || '';
+    if (!token) {
+      console.warn('[saveMemory] 无token，跳过云端保存（仅本地）');
+      return;
+    }
+    if (!extracted || extracted.length === 0) return;
+    // 批量传给服务端，由服务端逐条写入（单次网络请求）
     wx.cloud.callFunction({
       name: 'jieqian',
-      data: { action: 'saveMemory', content: content }
-    }).catch(() => {});
+      data: {
+        action: 'saveMemory',
+        token: token,
+        items: extracted.map(e => ({ tag: e.tag, cat: e.cat }))
+      }
+    }).then(res => {
+      console.log('[saveMemory] 已保存', extracted.length, '条:', extracted.map(e => e.tag).join(', '));
+    }).catch(err => {
+      console.error('[saveMemory] 保存失败:', err);
+    });
   },
 
   /* ========== 工具方法 ========== */

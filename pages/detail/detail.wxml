@@ -66,6 +66,10 @@
 
   <!-- 底部固定输入栏（localMode=false 时显示） -->
   <view class="input-bar" wx:if="{{!localMode}}">
+    <view class="quota-tip" wx:if="{{remainCount !== null}}">
+      <text wx:if="{{remainCount > 0}}">今日还可咨询 {{remainCount}} 次</text>
+      <text wx:else>今日咨询次数已用完，明天再来找阿鹏 🙏</text>
+    </view>
     <input class="input-field"
            placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
            value="{{inputValue}}"

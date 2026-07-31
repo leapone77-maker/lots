@@ -10,8 +10,10 @@
  *     注：接口地址与模型名全部取自环境变量，代码中不内置任何供应商/模型关键词。
  *
  * 数据库集合（需在云开发控制台手动创建）：
- *   - users    : { _id, phone, password, token, nickname, created }
- *   - memories: { _id, uid, phone, event, cat, tag, created }
+ *   - users    : { _id, phone, password, token, nickname, created, dailyLimit, dialogCount, dialogDate }
+ *        dailyLimit=每日可咨询次数上限(免费会员默认1，付费会员后续设置N); dialogCount=当日已用次数; dialogDate=计数对应日期(北京时间)，跨天重置
+ *   - memories: { _id, uid, phone, tag, created }
+ *        uid=关联 users._id；phone=冗余存一份便于人工排查(非查询键)；tag=合并标签(分类+文本, 如"[life]2026年本命年")；created=北京时间字符串(如"2026-07-31 10:19:27")
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
  *        { testMode: bool, loginRequired: bool, localMode: bool, promoEnabled: bool }
  *        testMode=true 关闭每日抽签限制(测试态); loginRequired=true 要求手机号登录(记忆云端同步)
@@ -38,6 +40,33 @@ async function authByToken(token) {
   const res = await users.where({ token }).get()
   if (res.data && res.data.length) return res.data[0]
   return null
+}
+
+// 北京时间日期字符串（用于每日配额按北京 0 点重置）
+function beijingDateStr() {
+  const bj = new Date(Date.now() + 8 * 60 * 60 * 1000)
+  const y = bj.getUTCFullYear()
+  const m = String(bj.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(bj.getUTCDate()).padStart(2, '0')
+  return y + '-' + m + '-' + d
+}
+
+// 解析当日配额：按登录账号取记录，跨天自动重置；无登录账号返回 null
+// 返回 { caller, used, limit, today, onDate }
+async function resolveQuota(token) {
+  if (!token) return null
+  const caller = await authByToken(token)
+  if (!caller) return null
+  const today = beijingDateStr()
+  let used = caller.dialogCount || 0
+  let onDate = caller.dialogDate || ''
+  const limit = (typeof caller.dailyLimit === 'number' && caller.dailyLimit > 0) ? caller.dailyLimit : 1
+  if (onDate !== today) {
+    used = 0
+    onDate = today
+    await users.doc(caller._id).update({ data: { dialogCount: 0, dialogDate: today } })
+  }
+  return { caller, used, limit, today, onDate }
 }
 
 /**
@@ -186,13 +215,25 @@ exports.main = async function(event, context) {
         // 自动注册（直接返回生成的 token，不再二次查询）
         var tk = genToken()
         var nick = '福主' + phone.slice(-4)
-        await users.add({
-          phone: phone,
-          password: password,
-          token: tk,
-          nickname: nick,
-          created: Date.now()
-        })
+        console.log('[register] 开始新建用户 phone=' + phone)
+        try {
+          const addRes = await users.add({
+            data: {
+              phone: phone,
+              password: password,
+              token: tk,
+              nickname: nick,
+              created: Date.now(),
+              dailyLimit: 1,   // 每日可咨询次数上限（未来按会员身份设置不同值，免费=1）
+              dialogCount: 0,  // 当日已咨询次数
+              dialogDate: ''   // 当日计数对应的日期（北京时间），跨天重置
+            }
+          })
+          console.log('[register] 新建用户成功 _id=' + (addRes && addRes._id) + ' phone=' + phone + ' token=' + tk.slice(0, 8) + '...')
+        } catch (addErr) {
+          console.error('[register] 写入数据库失败:', addErr.message || addErr)
+          return { code: 500, msg: '注册失败，请稍后重试' }
+        }
         return { code: 0, token: tk }
 
       } else {
@@ -206,24 +247,50 @@ exports.main = async function(event, context) {
       }
     }
 
-    // ---- 保存记忆 ----
+    // ---- 保存记忆（批量）----
+    // items: [{ tag: '2026年本命年', cat: 'life' }, ...]
+    // cat 与 tag 合并为单一字段 tag = "[life]2026年本命年" 存储（不再单独存 cat）
+    // 每条提取结果独立存一条记录；相同 tag 不重复写入（滤重）
     if (action === 'saveMemory') {
-      var ev = event.content || event.event
-      if (!ev) return { code: 1, msg: '记忆内容为空' }
-      // 尝试从token获取用户，没有则匿名存储
+      var items = event.items
+      if (!items || !Array.isArray(items) || items.length === 0) return { code: 1, msg: '记忆内容为空' }
+      console.log('[saveMemory] 收到保存请求 items=' + JSON.stringify(items).slice(0, 120) + ' token=' + (event.token || '').slice(0, 8))
       var u = null
       var token = event.token
       if (token) u = await authByToken(token)
+      console.log('[saveMemory] 查询用户结果 uid=' + (u ? u._id : 'null') + ' phone=' + (u ? u.phone : 'anonymous'))
 
-      await memories.add({
-        uid: u ? u._id : '',
-        phone: u ? u.phone : '',
-        event: ev,
-        cat: event.cat || '其他',
-        tag: event.tag || '',
-        created: new Date()
-      })
-      return { code: 0 }
+      // 格式化北京时间（UTC+8）：2026-07-31 10:19:27
+      // 云函数服务器运行在 UTC 时区，必须手动 +8h 偏移
+      function fmtBeijingDate() {
+        var d = new Date(Date.now() + 8 * 60 * 60 * 1000)
+        var pad = function(n) { return n < 10 ? '0' + n : '' + n }
+        return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
+          ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds())
+      }
+
+      var saved = 0
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i]
+        var rawTag = (it.tag || '').trim()
+        if (!rawTag) continue
+        // cat + tag 合并为单一存储值，如 "[life]2026年本命年"
+        var combinedTag = '[' + (it.cat || '其他').trim() + ']' + rawTag
+        // 滤重：同一用户+同一tag 不重复存（避免多次聊天重复记录"本命年"等）
+        var dup = await memories.where({ uid: u ? u._id : '', tag: combinedTag }).count()
+        if (dup.total > 0) { console.log('[saveMemory] 跳过重复 tag=' + combinedTag); continue }
+        await memories.add({
+          data: {
+            uid: u ? u._id : '',
+            phone: u ? u.phone : '',
+            tag: combinedTag,
+            created: fmtBeijingDate()
+          }
+        })
+        saved++
+      }
+      console.log('[saveMemory] 新增 ' + saved + ' 条记忆')
+      return { code: 0, saved: saved }
     }
 
     // ---- 读取记忆 ----
@@ -236,19 +303,34 @@ exports.main = async function(event, context) {
         .orderBy('created', 'desc')
         .limit(50)
         .get()
-      // 返回格式适配前端：memories 数组（每项有 event 字段）
-      var list = (res.data || []).map(function(m) { return m.event || '' }).filter(Boolean)
+      // 返回格式：memories 数组（每项取 tag 字段）
+      var list = (res.data || []).map(function(m) { return m.tag || '' }).filter(Boolean)
       return { code: 0, memories: list }
     }
 
     // ---- 深度解读对话 ----
     if (action === 'chat') {
       var qian = event.currentQian || null       // 当前签文对象
-      var memList = event.memories || []         // 记忆文本数组
+      var memList = Array.isArray(event.memories) ? event.memories : (event.memories ? [event.memories] : [])
       var question = event.question || event.message || ''
       var history = event.messages || []         // 聊天历史
 
       if (!question) return { code: 1, content: '请输入你的问题' }
+
+      // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
+      var callerToken = event.token || ''
+      var quota = await resolveQuota(callerToken)
+
+      // loginRequired=true 时必须有有效登录态才允许咨询（否则配额形同虚设）
+      if (!quota && callerToken) {
+        // 有 token 但查不到用户记录（可能是空文档/数据异常），拒绝并提示重新登录
+        console.error('[chat] token 有效但查不到用户记录，token=' + callerToken.slice(0, 8) + '...')
+        return { code: 401, content: '登录状态异常，请退出小程序后重新登录 🙏' }
+      }
+
+      if (quota && quota.used >= quota.limit) {
+        return { code: 429, content: '今日咨询次数已用完，明天再来找阿鹏聊聊吧 🙏' }
+      }
 
       // 构建带记忆的 system prompt
       var systemPrompt = buildSystemPrompt(qian, memList, question)
@@ -256,7 +338,25 @@ exports.main = async function(event, context) {
       // 调用远程解读服务
       var reply = await callInterp(systemPrompt, question, history)
 
-      return { code: 0, content: reply }
+      // 调用成功，累加当日配额并算剩余次数
+      var remain = null
+      if (quota) {
+        var newUsed = (quota.onDate === quota.today ? quota.used : 0) + 1
+        await users.doc(quota.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota.today } })
+        remain = quota.limit - newUsed
+        console.log('[chat] 配额累加完成 phone=' + (quota.caller.phone || '?') + ' used=' + newUsed + '/' + quota.limit + ' remain=' + remain)
+      } else {
+        console.log('[chat] 无登录态（无token），跳过配额统计')
+      }
+
+      return { code: 0, content: reply, remain: remain }
+    }
+
+    // ---- 查询当日剩余咨询次数（前端进入页面时展示）----
+    if (action === 'getQuota') {
+      var q = await resolveQuota(event.token)
+      if (!q) return { code: 401, remain: null, limit: null }
+      return { code: 0, remain: q.limit - q.used, limit: q.limit }
     }
 
     // ---- 清空全部测试数据（users + memories）----
@@ -278,7 +378,7 @@ exports.main = async function(event, context) {
         try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
         if (!doc) {
           try {
-            await col.add({ _id: 'global', testMode: false, loginRequired: false, localMode: true, promoEnabled: false, updatedAt: new Date() })
+            await col.add({ data: { _id: 'global', testMode: false, loginRequired: false, localMode: true, promoEnabled: false, updatedAt: new Date() } })
           } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
           return { code: 0, config: DEFAULTS }
         }
