@@ -37,13 +37,18 @@ Page({
   // 从详情页 navigateBack 返回时，首页不会被销毁、onLoad 不重跑，
   // 必须在这里重算每日限制，否则 canDraw 停留在抽前状态导致可反复抽签
   onShow() {
+    // 首屏 onLoad 已完整初始化（含一次 fetchConfig + checkLogin），跳过本次双拉；
+    // 之后从详情页返回时再热更新开关 + 重算每日限制 + 刷新登录态
+    if (!this._inited) { this._inited = true; return }
     this.appConfig = config.getCachedConfig();
     this.setData({ localMode: !!this.appConfig.localMode });
     this.checkDailyLimit();
+    this.checkLogin();
     config.fetchConfig().then((cfg) => {
       this.appConfig = cfg;
       this.setData({ localMode: !!cfg.localMode });
       this.checkDailyLimit();
+      this.checkLogin();
     });
   },
 
