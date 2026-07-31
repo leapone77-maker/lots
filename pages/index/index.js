@@ -71,9 +71,9 @@ Page({
     const sticks = [];
     const bodyColors = ['#E8C86B', '#DEB887', '#F0D890', '#D4A84B', '#EDD084', '#C9A355'];
     const tipColor = '#C43028';
-    const n = 14;
+    const n = 13;
     for (let i = 0; i < n; i++) {
-      const baseX = 18 + (i / (n - 1)) * 144;
+      const baseX = 15 + (i / (n - 1)) * 144;
       const x = baseX + (Math.random() - 0.5) * 8;
       const center = (i - (n - 1) / 2) / ((n - 1) / 2);
       const arc = (1 - center * center) * 22;

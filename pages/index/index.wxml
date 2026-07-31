@@ -67,8 +67,8 @@
       <view class="promo-header">
         <text class="promo-icon">☕</text>
         <view class="promo-title-wrap">
-          <text class="promo-title">请「阿鹏」喝杯茶</text>
-          <text class="promo-title">您的支持是最大鼓励</text>
+          <text class="promo-title">给「阿鹏」充电⚡️</text>
+          <text class="promo-title">你的爱让光更亮亿点</text>
         </view>
       </view>
       <image class="promo-qrcode" src="/images/qrcode-wechat.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>

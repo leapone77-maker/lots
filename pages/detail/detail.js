@@ -238,7 +238,14 @@ Page({
       return;
     }
 
-    // 已抽签 → 追加用户消息 + 深度解读
+    // 已抽签 → 先检查登录状态，未登录则只弹框不加消息（等取消/登录后再处理）
+    if (!this.data.localMode && !this.data.isLoggedIn) {
+      this._pendingQuestion = content;
+      this.setData({ showLogin: true, inputValue: '' });
+      return;
+    }
+
+    // 登录通过（或本地模式）→ 追加用户消息
     this.setData({
       chatMessages: [...this.data.chatMessages, userMsg],
       inputValue: '',
@@ -248,13 +255,6 @@ Page({
 
     // 显示"思考中"
     this._showThinking();
-
-    // 完整功能模式(localMode=false)且用户未登录 → 弹登录框
-    if (!this.data.localMode && !this.data.isLoggedIn) {
-      this._pendingQuestion = content;
-      this.setData({ showLogin: true });
-      return;
-    }
 
     // 提取记忆关键词
     this.extractMemory(content);
