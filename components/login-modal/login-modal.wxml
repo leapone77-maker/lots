@@ -4,6 +4,7 @@
     <view class="dlg-close" bindtap="close">✕</view>
     <view class="dlg-title">登录阿鹏趣签</view>
     <view class="dlg-sub">登录账号，不管何时何地，阿鹏都能记住您的故事</view>
+    <view class="dlg-hint">首次登录即自动注册</view>
     <input class="ipt" type="number" value="{{phone}}" placeholder="请输入手机号" maxlength="11" bindinput="onPhone" />
     <input class="ipt" password value="{{password}}" placeholder="请设置/输入密码（至少6位）" bindinput="onPwd" />
     <button class="dlg-btn" bindtap="submit">{{loading ? '登录中...' : '登录 / 注册'}}</button>

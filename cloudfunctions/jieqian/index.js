@@ -15,9 +15,10 @@
  *   - memories: { _id, uid, phone, tag, created }
  *        uid=关联 users._id；phone=冗余存一份便于人工排查(非查询键)；tag=合并标签(分类+文本, 如"[life]2026年本命年")；created=北京时间字符串(如"2026-07-31 10:19:27")
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
- *        { testMode: bool, loginRequired: bool, localMode: bool, promoEnabled: bool }
- *        testMode=true 关闭每日抽签限制(测试态); loginRequired=true 要求手机号登录(记忆云端同步)
- *        localMode=true 纯本地模式(不连远程解读); promoEnabled=true 显示首页引流卡片(公众号+个人微信二维码)
+ *        { testMode: bool, localMode: bool }
+ *        testMode=true 测试态(抽签无限次 + AI咨询无限次); false=正式(抽签每天1次, AI每天1次)
+ *        localMode=true 纯本地模式(隐藏输入框/不登录/不连远程解读); false=完整功能(需登录才可用AI)
+ *        说明：loginRequired / promoEnabled 已取消——登录门槛与首页引流卡片均由 localMode 派生
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -67,6 +68,31 @@ async function resolveQuota(token) {
     await users.doc(caller._id).update({ data: { dialogCount: 0, dialogDate: today } })
   }
   return { caller, used, limit, today, onDate }
+}
+
+/**
+ * 读取后台开关配置（testMode / localMode），统一来源避免多处重复实现
+ * 首次读取时若文档不存在则写入默认值，集合异常时安全回退默认值
+ */
+async function readConfig() {
+  const DEFAULTS = { testMode: false, localMode: true }
+  try {
+    const col = db.collection('app_config')
+    let doc = null
+    try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
+    if (!doc) {
+      try {
+        await col.add({ data: { _id: 'global', testMode: false, localMode: true, updatedAt: new Date() } })
+      } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
+      return DEFAULTS
+    }
+    return {
+      testMode: typeof doc.testMode === 'boolean' ? doc.testMode : DEFAULTS.testMode,
+      localMode: typeof doc.localMode === 'boolean' ? doc.localMode : DEFAULTS.localMode
+    }
+  } catch (e) {
+    return DEFAULTS
+  }
 }
 
 /**
@@ -201,11 +227,11 @@ exports.main = async function(event, context) {
   var action = event.action
 
   try {
-    // ---- 注册 / 登录（手机号+密码，自动注册）----
+    // ---- 注册 / 登录（账号+密码，自动注册）----
     if (action === 'register') {
       var phone = event.phone
       var password = event.password
-      if (!phone || !/^1\d{10}$/.test(phone)) return { code: 1, msg: '手机号格式不正确' }
+      if (!phone || !/^1\d{10}$/.test(phone)) return { code: 1, msg: '账号格式不正确' }
       if (!password) return { code: 1, msg: '请输入密码' }
 
       var res = await users.where({ phone }).get()
@@ -317,19 +343,32 @@ exports.main = async function(event, context) {
 
       if (!question) return { code: 1, content: '请输入你的问题' }
 
-      // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
-      var callerToken = event.token || ''
-      var quota = await resolveQuota(callerToken)
+      // ---- 读取后台开关 ----
+      var cfg = await readConfig()
+      var localMode = cfg.localMode !== false   // 默认纯本地
+      var testMode = cfg.testMode === true
 
-      // loginRequired=true 时必须有有效登录态才允许咨询（否则配额形同虚设）
-      if (!quota && callerToken) {
-        // 有 token 但查不到用户记录（可能是空文档/数据异常），拒绝并提示重新登录
-        console.error('[chat] token 有效但查不到用户记录，token=' + callerToken.slice(0, 8) + '...')
-        return { code: 401, content: '登录状态异常，请退出小程序后重新登录 🙏' }
+      // 纯本地模式：输入框隐藏，理论上不会调用到这里，保险拦截
+      if (localMode) {
+        return { code: 403, content: '本地模式不支持在线咨询' }
       }
 
-      if (quota && quota.used >= quota.limit) {
-        return { code: 429, content: '今日咨询次数已用完，明天再来找阿鹏聊聊吧 🙏' }
+      // 完整功能模式：必须有效登录态（localMode=false 才需登录）
+      var callerToken = event.token || ''
+      var caller = await authByToken(callerToken)
+      if (!caller) {
+        console.error('[chat] 完整功能模式但无有效登录态，token=' + (callerToken ? callerToken.slice(0, 8) + '...' : '(空)'))
+        return { code: 401, content: '请先登录后再咨询，或退出小程序重新登录 🙏' }
+      }
+
+      // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
+      // testMode=true 时为测试态：跳过配额限制，AI 咨询无限次
+      var remain = null
+      if (!testMode) {
+        var quota = await resolveQuota(callerToken)
+        if (quota.used >= quota.limit) {
+          return { code: 429, content: '今日咨询次数已用完，明天再来找阿鹏聊聊吧 🙏' }
+        }
       }
 
       // 构建带记忆的 system prompt
@@ -338,15 +377,15 @@ exports.main = async function(event, context) {
       // 调用远程解读服务
       var reply = await callInterp(systemPrompt, question, history)
 
-      // 调用成功，累加当日配额并算剩余次数
-      var remain = null
-      if (quota) {
-        var newUsed = (quota.onDate === quota.today ? quota.used : 0) + 1
-        await users.doc(quota.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota.today } })
-        remain = quota.limit - newUsed
-        console.log('[chat] 配额累加完成 phone=' + (quota.caller.phone || '?') + ' used=' + newUsed + '/' + quota.limit + ' remain=' + remain)
+      // 调用成功，累加当日配额并算剩余次数（仅非测试态）
+      if (!testMode) {
+        var quota2 = await resolveQuota(callerToken)
+        var newUsed = (quota2.onDate === quota2.today ? quota2.used : 0) + 1
+        await users.doc(quota2.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota2.today } })
+        remain = quota2.limit - newUsed
+        console.log('[chat] 配额累加完成 phone=' + caller.phone + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
       } else {
-        console.log('[chat] 无登录态（无token），跳过配额统计')
+        console.log('[chat] 测试态，跳过配额统计')
       }
 
       return { code: 0, content: reply, remain: remain }
@@ -354,6 +393,11 @@ exports.main = async function(event, context) {
 
     // ---- 查询当日剩余咨询次数（前端进入页面时展示）----
     if (action === 'getQuota') {
+      var cfgQ = await readConfig()
+      // 纯本地模式 / 测试态：无配额概念，返回 null 让前端隐藏次数提示
+      if (cfgQ.localMode !== false || cfgQ.testMode === true) {
+        return { code: 0, remain: null, limit: null }
+      }
       var q = await resolveQuota(event.token)
       if (!q) return { code: 401, remain: null, limit: null }
       return { code: 0, remain: q.limit - q.used, limit: q.limit }
@@ -368,35 +412,10 @@ exports.main = async function(event, context) {
     }
 
     // ---- 读取后台开关（热更新，无需提交小程序版本）----
-    // 集合 app_config 文档 _id='global'：{ testMode, loginRequired, localMode, promoEnabled }
+    // 集合 app_config 文档 _id='global'：{ testMode, localMode }
     // 首次调用自动写入默认值；集合未创建时安全回退默认值，不报错
     if (action === 'getConfig') {
-      const DEFAULTS = { testMode: false, loginRequired: false, localMode: true, promoEnabled: false }
-      try {
-        const col = db.collection('app_config')
-        let doc = null
-        try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
-        if (!doc) {
-          try {
-            await col.add({ data: { _id: 'global', testMode: false, loginRequired: false, localMode: true, promoEnabled: false, updatedAt: new Date() } })
-          } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
-          return { code: 0, config: DEFAULTS }
-        }
-        return {
-          code: 0,
-          config: {
-            testMode: typeof doc.testMode === 'boolean' ? doc.testMode : DEFAULTS.testMode,
-            // 兼容旧字段 phoneLoginRequired：改名过渡期读取旧值，避免已配"要求登录"的配置失效
-            loginRequired: typeof doc.loginRequired === 'boolean'
-              ? doc.loginRequired
-              : (typeof doc.phoneLoginRequired === 'boolean' ? doc.phoneLoginRequired : DEFAULTS.loginRequired),
-            localMode: typeof doc.localMode === 'boolean' ? doc.localMode : DEFAULTS.localMode,
-            promoEnabled: typeof doc.promoEnabled === 'boolean' ? doc.promoEnabled : DEFAULTS.promoEnabled
-          }
-        }
-      } catch (e) {
-        return { code: 0, config: DEFAULTS }
-      }
+      return { code: 0, config: await readConfig() }
     }
 
     return { code: 1, msg: '未知操作：' + action }

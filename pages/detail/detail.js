@@ -116,7 +116,7 @@ Page({
     wx.setStorageSync(key, list);
   },
 
-  /* ========== 登录相关（受后台 loginRequired 开关控制）========== */
+  /* ========== 登录相关（登录门槛由 localMode 派生：localMode=true 不登录，false 需登录）========== */
   checkLogin() {
     const cfg = this.appConfig || config.getCachedConfig();
     const userInfo = wx.getStorageSync('userInfo');
@@ -125,8 +125,8 @@ Page({
       this.setData({ isLoggedIn: true, userInfo });
       this.loadMemories();
       this.fetchQuota();
-    } else if (cfg.loginRequired === false) {
-      // 后台已关闭手机号登录：视为已登录（仅本地记忆），不弹登录框、不强制登录
+    } else if (this.data.localMode) {
+      // 纯本地模式：无需登录，视为已登录（仅本地记忆），不弹登录框、不强制登录
       this.setData({ isLoggedIn: true });
     }
   },
@@ -249,8 +249,8 @@ Page({
     // 显示"思考中"
     this._showThinking();
 
-    // 后台要求手机号登录且用户未登录 → 弹登录框
-    if (this.appConfig.loginRequired && !this.data.isLoggedIn) {
+    // 完整功能模式(localMode=false)且用户未登录 → 弹登录框
+    if (!this.data.localMode && !this.data.isLoggedIn) {
       this._pendingQuestion = content;
       this.setData({ showLogin: true });
       return;
@@ -450,7 +450,7 @@ Page({
     });
 
     console.log('[extractMemory] 输入:', text.slice(0, 40), '→ 提取到:', extracted.length > 0 ? extracted.map(e => e.tag).join(', ') : '(无)');
-    console.log('[extractMemory] loginRequired=', this.appConfig?.loginRequired, 'isLoggedIn=', this.data.isLoggedIn, 'hasToken=', !!((this.data.userInfo || wx.getStorageSync('userInfo') || {}).token));
+    console.log('[extractMemory] localMode=', this.data.localMode, 'isLoggedIn=', this.data.isLoggedIn, 'hasToken=', !!((this.data.userInfo || wx.getStorageSync('userInfo') || {}).token));
 
     if (extracted.length > 0) {
       // 记忆标签永远写入本地（关闭登录时仅本地，无需跨设备同步）
@@ -459,7 +459,7 @@ Page({
       wx.setStorageSync('localMemories', localMemories.slice(-30));
 
       // 只要用户已登录（有token），就同步到云端实现跨设备/多端一致
-      // 注意：loginRequired 控制"是否强制弹登录框"，不控制"已登录用户是否可同步"
+      // 注意：localMode=false 才需要登录（有token），localMode=true 免登录仅本地
       const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
       if (userInfo.token) {
         console.log('[saveMemory] 准备保存到云端:', extracted.map(e => e.tag).join(', '));
@@ -472,8 +472,8 @@ Page({
 
   getInterpMemory() {
     const cfg = this.appConfig || config.getCachedConfig();
-    // 开启手机号登录 → 云端记忆(已同步) + 本地兜底；关闭 → 仅本地记忆
-    const cloudMemories = cfg.loginRequired ? (wx.getStorageSync('userMemories') || []) : [];
+    // 完整功能模式(localMode=false，已登录) → 云端记忆(已同步) + 本地兜底；纯本地模式 → 仅本地记忆
+    const cloudMemories = !this.data.localMode ? (wx.getStorageSync('userMemories') || []) : [];
     const localMemories = wx.getStorageSync('localMemories') || [];
     const all = [...cloudMemories, ...localMemories];
     if (all.length === 0) return '';
