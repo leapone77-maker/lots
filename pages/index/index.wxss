@@ -69,16 +69,17 @@ page {
   color: #333;
 }
 
-/* ===== 签筒区域（居中，放大1.5倍） ===== */
+/* ===== 签筒区域（钉在屏幕垂直正中心，不受顶/底元素影响，放大1.5倍） ===== */
 .tube-area {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%) scale(1.5);
   display: flex;
   justify-content: center;
   align-items: center;
-  flex: 1;
-  min-height: 400rpx;
   width: 100%;
-  transform: scale(1.5);
 }
 
 .tube-area.shaking {
@@ -86,11 +87,11 @@ page {
 }
 
 @keyframes shakeTube {
-  0%, 100% { transform: translateX(0) rotate(0deg) scale(1.5); }
-  20% { transform: translateX(-6rpx) rotate(-2deg) scale(1.5); }
-  40% { transform: translateX(6rpx) rotate(2deg) scale(1.5); }
-  60% { transform: translateX(-4rpx) rotate(-1deg) scale(1.5); }
-  80% { transform: translateX(4rpx) rotate(1deg) scale(1.5); }
+  0%, 100% { transform: translateY(-50%) translateX(0) rotate(0deg) scale(1.5); }
+  20% { transform: translateY(-50%) translateX(-6rpx) rotate(-2deg) scale(1.5); }
+  40% { transform: translateY(-50%) translateX(6rpx) rotate(2deg) scale(1.5); }
+  60% { transform: translateY(-50%) translateX(-4rpx) rotate(-1deg) scale(1.5); }
+  80% { transform: translateY(-50%) translateX(4rpx) rotate(1deg) scale(1.5); }
 }
 
 /* 飞签 —— 与筒内签子样式一致（红头黄身） */
@@ -337,12 +338,12 @@ page {
   text-shadow: 0 1rpx 2rpx rgba(168, 32, 26, 0.15);
 }
 
-/* ===== 引流卡片区（公众号 + 个人微信） ===== */
+/* ===== 引流卡片区（公众号 + 个人微信，localMode=false 时显示，贴底） ===== */
 .promo-section {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  margin: 16rpx 28rpx 8rpx;
+  margin: auto 28rpx 50rpx;   /* 最后一个值=距底间距；想上移就改大 */
   gap: 0;
 }
 
@@ -410,10 +411,10 @@ page {
   align-self: stretch;
 }
 
-/* ===== 底部提示文字 ===== */
+/* ===== 底部提示文字（localMode=true 时显示，贴底） ===== */
 .bottom-tip {
   text-align: center;
-  padding: 0 0 calc(10rpx + env(safe-area-inset-bottom));
+  padding: 0 0 calc(50rpx + env(safe-area-inset-bottom));  /* 贴底；想上移就加大这个底部间距 */
   margin-top: auto;
 }
 

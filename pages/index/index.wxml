@@ -49,8 +49,8 @@
     </view>
   </view>
 
-  <!-- 引流卡片区（公众号 + 个人微信），受后台 promoEnabled 开关控制 -->
-  <view class="promo-section" wx:if="{{showPromo}}">
+  <!-- 引流卡片区（公众号 + 个人微信）：localMode=false 时显示 -->
+  <view class="promo-section" wx:if="{{!localMode}}">
     <view class="promo-card">
       <view class="promo-header">
         <text class="promo-icon">📢</text>
@@ -76,8 +76,8 @@
     </view>
   </view>
 
-  <!-- 底部提示 -->
-  <view class="bottom-tip">
+  <!-- 底部提示：localMode=true 时显示 -->
+  <view class="bottom-tip" wx:if="{{localMode}}">
     <text>本功能纯属娱乐，结果仅供参考</text>
   </view>
 
