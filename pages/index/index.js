@@ -244,12 +244,12 @@ Page({
   },
 
   onLogin(e) {
-    const { phone, token } = e.detail;
+    const { account, token } = e.detail;
     if (!token) {
       wx.showToast({ title: '登录失败：未获取到凭证', icon: 'none' });
       return;
     }
-    const userInfo = { phone, token };
+    const userInfo = { account, token };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     wx.showToast({ title: '登录成功', icon: 'success' });

@@ -177,9 +177,9 @@ Page({
   },
 
   onLogin(e) {
-    const { phone, token } = e.detail;
+    const { account, token } = e.detail;
     if (!token) return;
-    const userInfo = { phone, token };
+    const userInfo = { account, token };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     this.loadMemories();

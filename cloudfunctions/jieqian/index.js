@@ -10,10 +10,10 @@
  *     注：接口地址与模型名全部取自环境变量，代码中不内置任何供应商/模型关键词。
  *
  * 数据库集合（需在云开发控制台手动创建）：
- *   - users    : { _id, phone, password, token, nickname, created, dailyLimit, dialogCount, dialogDate }
+ *   - users    : { _id, account, password, token, nickname, created, dailyLimit, dialogCount, dialogDate }
  *        dailyLimit=每日可咨询次数上限(免费会员默认1，付费会员后续设置N); dialogCount=当日已用次数; dialogDate=计数对应日期(北京时间)，跨天重置
- *   - memories: { _id, uid, phone, tag, created }
- *        uid=关联 users._id；phone=冗余存一份便于人工排查(非查询键)；tag=合并标签(分类+文本, 如"[life]2026年本命年")；created=北京时间字符串(如"2026-07-31 10:19:27")
+ *   - memories: { _id, uid, account, tag, created }
+ *        uid=关联 users._id；account=冗余存一份便于人工排查(非查询键)；tag=合并标签(分类+文本, 如"[life]2026年本命年")；created=北京时间字符串(如"2026-07-31 10:19:27")
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
  *        { testMode: bool, localMode: bool }
  *        testMode=true 测试态(抽签无限次 + AI咨询无限次); false=正式(抽签每天1次, AI每天1次)
@@ -229,23 +229,23 @@ exports.main = async function(event, context) {
   try {
     // ---- 注册 / 登录（账号+密码，自动注册）----
     if (action === 'register') {
-      var phone = event.phone
+      var account = event.account
       var password = event.password
-      if (!phone || !/^1\d{10}$/.test(phone)) return { code: 1, msg: '账号格式不正确' }
+      if (!account || !/^1\d{10}$/.test(account)) return { code: 1, msg: '账号格式不正确' }
       if (!password) return { code: 1, msg: '请输入密码' }
 
-      var res = await users.where({ phone }).get()
+      var res = await users.where({ account }).get()
       var list = res.data || []
 
       if (list.length === 0) {
         // 自动注册（直接返回生成的 token，不再二次查询）
         var tk = genToken()
-        var nick = '福主' + phone.slice(-4)
-        console.log('[register] 开始新建用户 phone=' + phone)
+        var nick = '福主' + account.slice(-4)
+        console.log('[register] 开始新建用户 account=' + account)
         try {
           const addRes = await users.add({
             data: {
-              phone: phone,
+              account: account,
               password: password,
               token: tk,
               nickname: nick,
@@ -255,7 +255,7 @@ exports.main = async function(event, context) {
               dialogDate: ''   // 当日计数对应的日期（北京时间），跨天重置
             }
           })
-          console.log('[register] 新建用户成功 _id=' + (addRes && addRes._id) + ' phone=' + phone + ' token=' + tk.slice(0, 8) + '...')
+          console.log('[register] 新建用户成功 _id=' + (addRes && addRes._id) + ' account=' + account + ' token=' + tk.slice(0, 8) + '...')
         } catch (addErr) {
           console.error('[register] 写入数据库失败:', addErr.message || addErr)
           return { code: 500, msg: '注册失败，请稍后重试' }
@@ -284,7 +284,7 @@ exports.main = async function(event, context) {
       var u = null
       var token = event.token
       if (token) u = await authByToken(token)
-      console.log('[saveMemory] 查询用户结果 uid=' + (u ? u._id : 'null') + ' phone=' + (u ? u.phone : 'anonymous'))
+      console.log('[saveMemory] 查询用户结果 uid=' + (u ? u._id : 'null') + ' account=' + (u ? u.account : 'anonymous'))
 
       // 格式化北京时间（UTC+8）：2026-07-31 10:19:27
       // 云函数服务器运行在 UTC 时区，必须手动 +8h 偏移
@@ -308,7 +308,7 @@ exports.main = async function(event, context) {
         await memories.add({
           data: {
             uid: u ? u._id : '',
-            phone: u ? u.phone : '',
+            account: u ? u.account : '',
             tag: combinedTag,
             created: fmtBeijingDate()
           }
@@ -383,7 +383,7 @@ exports.main = async function(event, context) {
         var newUsed = (quota2.onDate === quota2.today ? quota2.used : 0) + 1
         await users.doc(quota2.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota2.today } })
         remain = quota2.limit - newUsed
-        console.log('[chat] 配额累加完成 phone=' + caller.phone + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
+        console.log('[chat] 配额累加完成 account=' + caller.account + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
       } else {
         console.log('[chat] 测试态，跳过配额统计')
       }
@@ -428,7 +428,7 @@ exports.main = async function(event, context) {
       const caller = await authByToken(token)
       if (!caller) return { code: 401, msg: '请先登录' }
       await users.doc(caller._id).update({ data: { ['draws.' + date]: sign } })
-      console.log('[recordDraw] phone=' + caller.phone + ' date=' + date + ' sign=' + sign)
+      console.log('[recordDraw] account=' + caller.account + ' date=' + date + ' sign=' + sign)
       return { code: 0, ok: true }
     }
 
@@ -445,7 +445,7 @@ exports.main = async function(event, context) {
       await users.doc(caller._id).update({
         data: { ['chats.' + date]: _.push({ each: msgs }) }
       })
-      console.log('[recordChat] phone=' + caller.phone + ' date=' + date + ' count=' + msgs.length)
+      console.log('[recordChat] account=' + caller.account + ' date=' + date + ' count=' + msgs.length)
       return { code: 0, ok: true }
     }
 

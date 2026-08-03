@@ -3,7 +3,7 @@ Component({
     visible: { type: Boolean, value: false }
   },
   data: {
-    phone: '',
+    account: '',
     password: '',
     err: '',
     loading: false
@@ -12,7 +12,7 @@ Component({
     'visible': function(val) {
       if (!val) {
         // 关闭时清空表单
-        this.setData({ phone: '', password: '', err: '' });
+        this.setData({ account: '', password: '', err: '' });
       }
     }
   },
@@ -21,8 +21,8 @@ Component({
     close: function() {
       this.triggerEvent('close');
     },
-    onPhone: function(e) {
-      this.setData({ phone: e.detail.value });
+    onAccount: function(e) {
+      this.setData({ account: e.detail.value });
     },
     onPwd: function(e) {
       this.setData({ password: e.detail.value });
@@ -31,8 +31,8 @@ Component({
       var self = this;
       this.setData({ err: '', loading: true });
 
-      if (!/^1\d{10}$/.test(this.data.phone)) {
-        this.setData({ err: '手机号格式不正确', loading: false });
+      if (!/^1\d{10}$/.test(this.data.account)) {
+        this.setData({ err: '账号格式不正确', loading: false });
         return;
       }
       if (this.data.password.length < 6) {
@@ -45,7 +45,7 @@ Component({
         name: 'jieqian',
         data: {
           action: 'register',
-          phone: self.data.phone,
+          account: self.data.account,
           password: self.data.password
         }
       }).then(function(res) {
@@ -62,7 +62,7 @@ Component({
           var tk = result.token || '';
           console.log('[login] token:', tk ? '有' : '无', ', 完整返回:', JSON.stringify(result));
           self.triggerEvent('login', {
-            phone: self.data.phone,
+            account: self.data.account,
             token: tk
           });
           self.close();
