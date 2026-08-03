@@ -40,6 +40,7 @@ Page({
     // 首屏 onLoad 已完整初始化（含一次 fetchConfig + checkLogin），跳过本次双拉；
     // 之后从详情页返回时再热更新开关 + 重算每日限制 + 刷新登录态
     if (!this._inited) { this._inited = true; return }
+    this._checkDayRollover();
     this.appConfig = config.getCachedConfig();
     this.setData({ localMode: !!this.appConfig.localMode });
     this.checkDailyLimit();
@@ -49,6 +50,33 @@ Page({
       this.setData({ localMode: !!cfg.localMode });
       this.checkDailyLimit();
       this.checkLogin();
+    });
+  },
+
+  // 跨天重置：用户从后台切回前台时，若已跨过 0 点且当前 canDraw=false，
+  // 立即刷新为可抽签（避免一直挂在前台过 0 点后无法重抽的问题）
+  _checkDayRollover() {
+    const todayStr = getBeijingDateStr();
+    const lastDate = wx.getStorageSync('lastDrawDate') || '';
+    if (lastDate && lastDate !== todayStr && !this.data.canDraw) {
+      // 跨天了 + 当前按钮还是禁用的 → 强制启用，清旧签
+      wx.removeStorageSync('cachedQian');
+      this.setData({ canDraw: true });
+      console.log('[跨天] 已重置抽签状态，今天日期:', todayStr);
+    }
+  },
+
+  // 扫一扫按钮：打开摄像头扫码，结果复制到剪贴板（换成标准二维码后，长按图片也可识别）
+  onScanQrcode() {
+    wx.scanCode({
+      onlyFromCamera: false,
+      success: (res) => {
+        wx.setClipboardData({
+          data: res.result,
+          success: () => wx.showToast({ title: '扫码结果已复制', icon: 'none' })
+        });
+      },
+      fail: () => {}
     });
   },
 

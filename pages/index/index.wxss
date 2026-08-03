@@ -205,16 +205,11 @@ page {
   background: linear-gradient(90deg, transparent 0%, rgba(255,235,210,0.08) 50%, transparent 100%);
 }
 
-/* 福字：行书书法 + 哑光烫金 */
-.tube-big-label {
-  color: #C9A961;
-  font-size: 68rpx;
-  font-family: 'STXingkai', 'KaiTi', 'LiSu', 'FangSong', serif;
-  font-weight: bold;
+/* 福字：篆书图片（透明底金色字，避免设备缺字体不显示） */
+.tube-fu-img {
+  width: 114rpx;
+  height: 114rpx;
   margin-top: 2rpx;
-  text-shadow:
-    0 1rpx 2rpx rgba(90,55,15,0.45),
-    0 0 8rpx rgba(201,169,97,0.3);
   z-index: 3;
 }
 
@@ -398,6 +393,16 @@ page {
   color: rgba(160, 140, 110, 0.6);
   margin-top: 12rpx;
   letter-spacing: 1rpx;
+}
+
+.promo-scan-btn {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #fff;
+  background: linear-gradient(135deg, #c9a961, #b8945a);
+  border-radius: 28rpx;
+  padding: 6rpx 0;
+  line-height: 1.6;
 }
 
 .promo-divider {

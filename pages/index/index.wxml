@@ -27,7 +27,7 @@
         </view>
       </view>
       <view class="tube-body">
-        <text class="tube-big-label">福</text>
+        <image class="tube-fu-img" src="/images/fu-zhuan-1.png" mode="aspectFit"/>
       </view>
       <view class="tube-rim bottom-rim"></view>
       <view class="tube-base"></view>
@@ -73,6 +73,7 @@
       </view>
       <image class="promo-qrcode" src="/images/qrcode-wechat.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
       <text class="promo-hint">长按识别二维码 → 亿点心意</text>
+      <button class="promo-scan-btn" bindtap="onScanQrcode">📷 扫一扫</button>
     </view>
   </view>
 
