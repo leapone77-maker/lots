@@ -438,7 +438,9 @@ Page({
       const msgs = chats.map((m, i) => ({
         id: Date.now() + i,
         role: m.role,
-        content: '<div style="color:' + (m.role === 'user' ? '#4a3728' : '#333333') + ';font-size:14px;line-height:1.6;">' + this._escHtml(m.content) + '</div>'
+        content: m.role === 'user'
+          ? ('<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(m.content) + '</div>')
+          : this.formatReply(m.content)
       }))
       this.setData({
         chatMessages: msgs,
@@ -449,37 +451,75 @@ Page({
 
   /* ========== 格式化解读回复为 HTML ========== */
   formatReply(text) {
-    // 先清洗：去掉解读角色自报身份前缀（含方括号变体）+ 问候语
-    let cleaned = text
+    if (!text) return '';
+    // 1. 清洗前缀
+    var s = String(text)
       .replace(/^(?:【?解签大师?】?|【?阿鹏趣签?】?|【?解读?】?|【?解答?】?)[：:，,\s]*/i, '')
       .replace(/^(?:您好|你好|福主您好|福主你好)[，,。.\s]*/i, '')
-      // 去掉完整的 HTML 标签行（如 <div style="..."> 、</div> 等）
-      .replace(/<\/?(div|span|p|br|section|article|strong|em|b|i|u|h[1-6]|ul|ol|li|blockquote|pre|code)\b[^>]*>/gi, '')
-      // 去掉 Markdown 加粗 **text**
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      // 去掉单独的 ** 残留
-      .replace(/\*\*/g, '')
-      // 去掉空行
+      .replace(/<\/?(div|span|p|br|section|article|h[1-6]|ul|ol|li|blockquote|pre|code)\b[^>]*>/gi, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+    if (!s) return '';
 
-    const lines = cleaned.split('\n').filter(l => l.trim());
-    const htmlParts = lines.map(line => {
-      const trimmed = line.trim();
-      // 跳过看起来还是 HTML 标签残留的行（以 < 开头或包含 style= 等）
-      if (/^<[a-z\/!]/i.test(trimmed) || /^&lt;[a-z\/]/i.test(trimmed)) return '';
-      const escaped = this._escHtml(trimmed);
-      if (trimmed.length < 20 && !trimmed.includes('。')) {
-        return '<span style="color:#A8201A;font-weight:bold;display:block;margin-top:12px;margin-bottom:6px;font-size:14px;padding-bottom:4px;border-bottom:1px solid rgba(168,32,26,0.18);">' + escaped + '</span>';
+    // 2. Markdown **加粗** → <strong>
+    s = s.replace(/\*\*([^*]+?)\*\*:?/g, '<strong>$1</strong>');
+
+    // 3. 智能断行（兼容有/无 ** 两种格式）
+    s = s.replace(/(?=\d+[\.\、\s]\*?(?:方面|建议|提醒|注意|运势|财运|感情|健康|事业|学业|解读|签意))/gi, '\n');
+    s = s.replace(/(?=(?:此外|另外|同时|综上|总之|最后|需要注意的是|值得一提的是)\s*[，,：:])/g, '\n');
+
+    // 3.5 重点词加粗（在断行后、按行渲染前统一处理）
+    s = this._boldKeywords(s);
+
+    // 4. 按行渲染 —— 保证每行完整输出，绝不丢弃
+    var lines = s.split('\n');
+    var parts = [];
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t) continue;
+      // 独立小标题行（**xxx** 独立成行）
+      if (/^<strong>[^<]*?<\/strong>\s*:?\s*$/.test(t)) {
+        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:14px;margin:16px 0 8px 0;padding-bottom:4px;border-bottom:1px solid rgba(168,32,26,0.12);">' + t + '</div>');
+        continue;
       }
-      if (/^\d+\./.test(trimmed)) {
-        const num = trimmed.match(/^\d+/)[0];
-        const rest = escaped.replace(/^\d+\.\s*/, '');
-        return '<span style="display:block;color:#333333;margin:6rpx 0;line-height:1.65;font-size:13px;"><span style="color:#A8201A;font-weight:bold;">' + num + '. </span>' + rest + '</span>';
+      // 数字序号行 → 红色标题风格（与签运诗标题统一）
+      if (/^\d+[\.\、]/.test(t)) {
+        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:14px;margin:14px 0 6px 0;line-height:1.8;">' + t + '</div>');
+        continue;
       }
-      return '<span style="display:block;color:#333333;margin:5rpx 0;line-height:1.65;font-size:13px;">' + escaped + '</span>';
-    });
-    return '<div style="padding:4rpx 0;">' + htmlParts.filter(Boolean).join('') + '</div>';
+      // 短行标题（无标点、较短）
+      if (t.length <= 20 && t.indexOf('。') < 0 && t.indexOf('，') < 0 && !/^<strong>/.test(t)) {
+        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:14px;margin:14px 0 6px 0;">' + t + '</div>');
+        continue;
+      }
+      // 总结段落（总的来说/总之/综上）→ 前加分隔线
+      if (/^(?:总的来说|总而言之|综上所述|总之|综上|一言以蔽之)[，,：:]/.test(t)) {
+        parts.push('<div style="margin:18px 0 10px 0;border-top:1px solid rgba(168,32,26,0.15);"></div>');
+        parts.push('<div style="color:#555;margin:5px 0;line-height:1.85;font-size:13px;">' + t + '</div>');
+        continue;
+      }
+      // 普通正文
+      parts.push('<div style="color:#444;margin:5px 0;line-height:1.85;font-size:13px;">' + t + '</div>');
+    }
+    return '<div style="padding:2px 0;">' + parts.join('') + '</div>';
+  },
+
+  /* ========== 重点词自动加粗 ========== */
+  _boldKeywords(text) {
+    var s = text;
+    // 「引号内容」加粗（中文引号优先）
+    s = s.replace(/「([^」]+)」/g, '<strong>「$1」</strong>');
+    s = s.replace(/"([^"]+)"/g, '<strong>"$1"</strong>');
+    // 常见关键语义词组加粗（签文解读中的高频核心词）
+    var keyPatterns = [
+      /(?:当前困境|潜在转机|时间预期|应对建议|核心提示|总体研判|转折点|突破口|关键节点)(?=[:：])/g,
+      /(?:风梅初隐|月累已喜|水星自聚|凤星黎闲)/g,
+      /(?:低谷蓄力|真心换真心|切忌猜疑|极度困顿|投资入出|量入为出|需自省|当速就医|早睡早起|身心自安)/g,
+    ];
+    for (var k = 0; k < keyPatterns.length; k++) {
+      s = s.replace(keyPatterns[k], '<strong>$&</strong>');
+    }
+    return s;
   },
 
   /* ========== 记忆系统 ========== */
