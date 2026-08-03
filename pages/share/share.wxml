@@ -1,0 +1,86 @@
+<view class="page">
+  <scroll-view class="main-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    
+    <!-- 加载中 -->
+    <view wx:if="{{loading}}" class="status-container">
+      <view class="loading-spinner"></view>
+      <text class="status-text">加载中...</text>
+    </view>
+
+    <!-- 已过期 -->
+    <view wx:elif="{{expired}}" class="status-container">
+      <text class="status-icon">⏰</text>
+      <text class="status-title">分享已过期</text>
+      <text class="status-desc">该分享链接已超过24小时有效期</text>
+      <button class="action-btn" bindtap="goHome">返回首页抽签</button>
+    </view>
+
+    <!-- 未找到 -->
+    <view wx:elif="{{notFound}}" class="status-container">
+      <text class="status-icon">🔍</text>
+      <text class="status-title">分享不存在</text>
+      <text class="status-desc">该分享链接已被删除或不存在</text>
+      <button class="action-btn" bindtap="goHome">返回首页抽签</button>
+    </view>
+
+    <!-- 正常内容 -->
+    <view wx:else class="content-container">
+      <block wx:if="{{share}}">
+      <!-- 签文卡片 -->
+      <view class="qian-card">
+        <view class="qian-header">
+          <view class="qian-badge">{{share.level}}</view>
+          <text class="qian-title">第 {{share.signId}} 签 · {{share.level}}</text>
+        </view>
+
+        <view class="qian-poem-section">
+          <text class="poem-label">签诗</text>
+          <text class="poem-text">{{share.poemText}}</text>
+        </view>
+
+        <view class="card-divider"></view>
+
+        <view class="interpret-section" wx:if="{{share.basic}}">
+          <text class="interp-label">解答</text>
+          <view class="interp-items">
+            <view class="interp-item" wx:if="{{share.basic.career}}">
+              <text class="interp-tag">【事业】</text>
+              <text class="interp-val">{{share.basic.career}}</text>
+            </view>
+            <view class="interp-item" wx:if="{{share.basic.love}}">
+              <text class="interp-tag">【感情】</text>
+              <text class="interp-val">{{share.basic.love}}</text>
+            </view>
+            <view class="interp-item" wx:if="{{share.basic.wealth}}">
+              <text class="interp-tag">【财运】</text>
+              <text class="interp-val">{{share.basic.wealth}}</text>
+            </view>
+            <view class="interp-item" wx:if="{{share.basic.health}}">
+              <text class="interp-tag">【健康】</text>
+              <text class="interp-val">{{share.basic.health}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 聊天记录 -->
+      <view class="chat-section" wx:if="{{chatMessages.length > 0}}">
+        <view class="chat-header">
+          <text class="chat-title">咨询记录</text>
+        </view>
+        <view class="chat-messages">
+          <view class="message {{item.role}}" wx:for="{{chatMessages}}" wx:key="index">
+            <view class="message-avatar">
+              <image wx:if="{{item.role === 'assistant'}}" class="avatar-logo" src="/images/jieqian-logo-peng.png" mode="aspectFit"/>
+              <text wx:elif="{{item.role === 'user'}}">我</text>
+            </view>
+            <view class="message-bubble">
+              <rich-text nodes="{{item.content}}"></rich-text>
+            </view>
+          </view>
+        </view>
+      </view>
+      </block>
+    </view>
+  </scroll-view>
+</view>

@@ -19,6 +19,9 @@
  *        testMode=true 测试态(抽签无限次 + AI咨询无限次); false=正式(抽签每天1次, AI每天1次)
  *        localMode=true 纯本地模式(隐藏输入框/不登录/不连远程解读); false=完整功能(需登录才可用AI)
  *        说明：loginRequired / promoEnabled 已取消——登录门槛与首页引流卡片均由 localMode 派生
+ *   - shares: { _id(shareId), signId, level, poemText, basic:{career,love,wealth,health},
+ *              chats:[{role,content}], uid, account, createdAt, expireAt }
+ *        shareId=10位混淆短码(主键)；expireAt=过期时间戳(24h)；getShareById 只读读取、不校验 token
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -28,12 +31,21 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const users = db.collection('users')
 const memories = db.collection('memories')
+const shares = db.collection('shares')
 
 // 远程解读服务密钥（在云开发控制台以环境变量 INTERP_KEY 配置，不内置明文，不在代码中体现供应商名）
 const INTERP_KEY = process.env.INTERP_KEY || ''
 
 function genToken() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
+}
+
+// 生成 10 位混淆短码（大小写+数字，足够 62^10 ≈ 8e17 种组合，冲突概率极低）
+function genShareId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  let s = ''
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  return s
 }
 
 async function authByToken(token) {
@@ -458,6 +470,53 @@ exports.main = async function(event, context) {
         code: 0,
         draws: (caller.draws) || {},
         chats: (caller.chats) || {}
+      }
+    }
+
+    // ---- 生成只读分享快照（签运诗 + 聊天记录），24小时过期 ----
+    // 前端把当前展示的数据组装成 snapshot 传过来，云函数只做存储，不暴露用户 token
+    // 传 shareId 则更新该快照（同一会话只维护一个分享文档），否则新建
+    // 支持匿名：传 token 则绑定账号；不传 token 则用 anonId 生成匿名快照
+    if (action === 'createShare') {
+      const token = event.token || ''
+      const anonId = event.anonId || ''
+      const caller = token ? await authByToken(token) : null
+      const snap = event.snapshot || {}
+      if (!snap.signId) return { code: 1, msg: '缺少签号' }
+
+      // 生成或复用 shareId
+      let shareId = event.shareId || ''
+      if (!shareId) shareId = genShareId()
+
+      const now = Date.now()
+      const doc = {
+        signId: snap.signId,
+        level: snap.level || '',
+        poemText: snap.poemText || '',
+        basic: snap.basic || null,
+        chats: Array.isArray(snap.chats) ? snap.chats : [],
+        uid: caller ? caller._id : (anonId || 'anon'),
+        account: caller ? caller.account : (anonId ? '本地用户' : '匿名'),
+        createdAt: now,
+        expireAt: now + 24 * 60 * 60 * 1000   // 24小时过期
+      }
+      await shares.doc(shareId).set({ data: doc })
+      console.log('[createShare] shareId=' + shareId + ' chats=' + doc.chats.length + (caller ? ' account=' + caller.account : ' anonId=' + anonId))
+      return { code: 0, shareId: shareId }
+    }
+
+    // ---- 读取分享快照（只读，不校验 token，任何人可访问） ----
+    if (action === 'getShareById') {
+      const shareId = event.shareId || ''
+      if (!shareId) return { code: 1, msg: '缺少shareId' }
+      try {
+        const res = await shares.doc(shareId).get()
+        if (!res.data) return { code: 404, msg: '分享不存在' }
+        if (res.data.expireAt && res.data.expireAt < Date.now()) return { code: 410, msg: '分享已过期' }
+        return { code: 0, share: res.data }
+      } catch (e) {
+        if (e.errCode === -1 || (e.message && e.message.includes('not exist'))) return { code: 404, msg: '分享不存在' }
+        return { code: 404, msg: '分享不存在' }
       }
     }
 

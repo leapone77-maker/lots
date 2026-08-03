@@ -666,11 +666,67 @@ Page({
   },
 
   /* ========== 分享 ========== */
+
+  // 预生成/刷新分享快照（签到页面就调用一次，后续聊天变化时再刷新）
+  _refreshShare(callback) {
+    if (!this.data.hasDrawn) return
+    const q = this.data.qian || {}
+    if (!q.id) return
+
+    const token = this.data.userInfo && this.data.userInfo.token
+    const anonId = token ? '' : (wx.getStorageSync('anonShareId') || '')
+    const snapshot = {
+      signId: q.id,
+      level: q.level,
+      poemText: q.poemText,
+      basic: q.basic || null,
+      chats: this.data.chatMessages.map(m => ({ role: m.role, content: this._stripHtml(m.content) }))
+    }
+
+    const data = { action: 'createShare', snapshot: snapshot }
+    if (token) data.token = token
+    else {
+      // 本地模式用匿名 id，同一个设备复用同一个
+      let id = wx.getStorageSync('anonShareId')
+      if (!id) {
+        id = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+        wx.setStorageSync('anonShareId', id)
+      }
+      data.anonId = id
+    }
+    if (this.data._shareId) data.shareId = this.data._shareId
+
+    wx.cloud.callFunction({ name: 'jieqian', data: data }).then(res => {
+      if (res.result && res.result.code === 0 && res.result.shareId) {
+        this.setData({ _shareId: res.result.shareId })
+        if (callback) callback()
+      }
+    }).catch(() => { if (callback) callback() })
+  },
+
+  // 分享按钮点击 → 先刷新快照，再触发微信原生分享面板
+  onShareTap() {
+    if (!this.data.hasDrawn) return
+    this._refreshShare(() => {
+      // 快照生成后，用户点微信右上角 "..." 的转发按钮时 onShareAppMessage 会拿到最新 shareId
+    })
+  },
+
+  // 微信原生分享菜单回调（右上角 "..." → 转发给朋友）
   onShareAppMessage() {
+    const shareId = this.data._shareId || ''
+    if (shareId) {
+      return {
+        title: `阿鹏趣签·第${this.data.drawnId || ''}签`,
+        path: '/pages/share/share?shareId=' + shareId,
+        imageUrl: '/images/jieqian-logo-peng.png'
+      }
+    }
+    // 兜底：还没生成快照就回首页
     return {
-      title: `阿鹏趣签 - 第${this.data.drawnId || ''}签`,
+      title: '阿鹏趣签',
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
-    };
+    }
   }
 });

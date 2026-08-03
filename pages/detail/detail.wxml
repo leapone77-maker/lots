@@ -4,10 +4,18 @@
 
     <!-- 签诗卡片（自动展示） -->
     <view class="qian-card" wx:if="{{qian}}">
-      <!-- 签号 + 等级 -->
+      <!-- 签号 + 等级 + 分享 -->
       <view class="qian-header">
-        <view class="qian-badge">{{qian.level}}</view>
-        <text class="qian-title">第 {{qian.id}} 签 · {{qian.level}}</text>
+        <view class="qian-header-left">
+          <view class="qian-badge">{{qian.level}}</view>
+          <text class="qian-title">第 {{qian.id}} 签 · {{qian.level}}</text>
+        </view>
+        <!-- 分享按钮：用普通 view 做绝对定位容器，避免 button 默认 width:100% 干扰 -->
+        <view class="qian-share-wrap" wx:if="{{hasDrawn}}">
+          <button class="qian-share-btn" bindtap="onShareTap" open-type="share">
+            <image class="qian-share-icon" src="/images/share-icon.png" mode="aspectFit"/>
+          </button>
+        </view>
       </view>
 
       <!-- 签诗 -->
