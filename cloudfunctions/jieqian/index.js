@@ -187,7 +187,7 @@ async function callInterp(systemContent, userQuestion, chatHistory) {
   const body = JSON.stringify({
     model: apiModel,
     messages: msgs,
-    temperature: 0.85,
+    temperature: 0.7,
     max_tokens: 1000
   })
 
@@ -419,7 +419,7 @@ exports.main = async function(event, context) {
     }
 
     // ---- 写入当日签号到 users.draws[date]，供历史页跨设备展示 ----
-    // draws 结构：{ "2026-07-31": 657, ... }，value=签号(1-666)，无 key 或 0 表示当天没抽
+    // draws 结构：{ "2026-07-31": 657, ... }，value=签号(1-888)，无 key 或 0 表示当天没抽
     if (action === 'recordDraw') {
       const token = event.token || ''
       const date = event.date || ''          // 形如 "2026-07-31"

@@ -452,7 +452,7 @@ Page({
   /* ========== 格式化解读回复为 HTML ========== */
   formatReply(text) {
     if (!text) return '';
-    // 1. 清洗前缀
+    // 1. 清洗前缀与 HTML/Markdown 标签残留
     var s = String(text)
       .replace(/^(?:【?解签大师?】?|【?阿鹏趣签?】?|【?解读?】?|【?解答?】?)[：:，,\s]*/i, '')
       .replace(/^(?:您好|你好|福主您好|福主你好)[，,。.\s]*/i, '')
@@ -461,54 +461,76 @@ Page({
       .trim();
     if (!s) return '';
 
-    // 2. Markdown **加粗** → <strong>
+    // 2. 严格去掉 Markdown 标题符号 # / ## / ###（仅行首），避免显示 # 号
+    s = s.replace(/^[#\s]+/gm, '').replace(/^\s+|\s+$/gm, '');
+
+    // 3. Markdown **加粗** → <strong>
     s = s.replace(/\*\*([^*]+?)\*\*:?/g, '<strong>$1</strong>');
 
-    // 3. 智能断行（兼容有/无 ** 两种格式）
+    // 4. 智能断行（兼容有/无 ** 两种格式）
     s = s.replace(/(?=\d+[\.\、\s]\*?(?:方面|建议|提醒|注意|运势|财运|感情|健康|事业|学业|解读|签意))/gi, '\n');
     s = s.replace(/(?=(?:此外|另外|同时|综上|总之|最后|需要注意的是|值得一提的是)\s*[，,：:])/g, '\n');
 
-    // 3.5 重点词加粗（在断行后、按行渲染前统一处理）
+    // 5. 重点词加粗（在断行后、按行渲染前统一处理）
     s = this._boldKeywords(s);
 
-    // 4. 按行渲染 —— 保证每行完整输出，绝不丢弃
+    // 6. 按行渲染 —— 严格控制样式，标题才红，正文恢复深灰
     var lines = s.split('\n');
     var parts = [];
+    var hasSummaryDivider = false;
     for (var i = 0; i < lines.length; i++) {
       var t = lines[i].trim();
       if (!t) continue;
+
       // 独立小标题行（**xxx** 独立成行）
       if (/^<strong>[^<]*?<\/strong>\s*:?\s*$/.test(t)) {
-        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:14px;margin:16px 0 8px 0;padding-bottom:4px;border-bottom:1px solid rgba(168,32,26,0.12);">' + t + '</div>');
+        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:15px;margin:18px 0 10px 0;padding-bottom:6px;border-bottom:1px solid rgba(168,32,26,0.12);">' + t + '</div>');
         continue;
       }
-      // 数字序号行 → 红色标题风格（与签运诗标题统一）
-      if (/^\d+[\.\、]/.test(t)) {
-        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:14px;margin:14px 0 6px 0;line-height:1.8;">' + t + '</div>');
+
+      // 数字序号行："1. 标题：正文" → 标题前缀红色加粗，后面正文深灰
+      // 标题里可能含 _boldKeywords 加的 <strong>...</strong>，故字符集只排除冒号、允许 <>
+      var numMatch = t.match(/^(\d+[\.\、])\s*((?:<strong>)?[^：:]+(?:<\/strong>)?)[：:]\s*(.*)$/);
+      if (numMatch) {
+        var numPrefix = numMatch[1] + ' ' + numMatch[2] + '：';
+        var numBody = numMatch[3];
+        parts.push('<div style="margin:12px 0 8px 0;line-height:1.85;font-size:13px;"><span style="color:#A8201A;font-weight:bold;font-size:14px;">' + numPrefix + '</span><span style="color:#444;">' + numBody + '</span></div>');
         continue;
       }
-      // 短行标题（无标点、较短）
+
+      // 短行标题（无句号逗号、较短，如"事业解析："）
       if (t.length <= 20 && t.indexOf('。') < 0 && t.indexOf('，') < 0 && !/^<strong>/.test(t)) {
-        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:14px;margin:14px 0 6px 0;">' + t + '</div>');
+        parts.push('<div style="color:#A8201A;font-weight:bold;font-size:15px;margin:18px 0 10px 0;padding-bottom:6px;border-bottom:1px solid rgba(168,32,26,0.12);">' + t + '</div>');
         continue;
       }
+
       // 总结段落（总的来说/总之/综上）→ 前加分隔线
       if (/^(?:总的来说|总而言之|综上所述|总之|综上|一言以蔽之)[，,：:]/.test(t)) {
+        hasSummaryDivider = true;
         parts.push('<div style="margin:18px 0 10px 0;border-top:1px solid rgba(168,32,26,0.15);"></div>');
         parts.push('<div style="color:#555;margin:5px 0;line-height:1.85;font-size:13px;">' + t + '</div>');
         continue;
       }
-      // 普通正文
+
+      // 普通正文：深灰色，不再全红
       parts.push('<div style="color:#444;margin:5px 0;line-height:1.85;font-size:13px;">' + t + '</div>');
     }
+
+    // 兜底：最后一行若不是“总的来说/总之”等已加分隔线，则统一在文末总结前补一条分隔线
+    if (!hasSummaryDivider && parts.length > 0) {
+      var lastIdx = parts.length - 1;
+      parts.splice(lastIdx, 0, '<div style="margin:18px 0 10px 0;border-top:1px solid rgba(168,32,26,0.15);"></div>');
+    }
+
     return '<div style="padding:2px 0;">' + parts.join('') + '</div>';
   },
 
   /* ========== 重点词自动加粗 ========== */
   _boldKeywords(text) {
     var s = text;
-    // 「引号内容」加粗（中文引号优先）
+    // 「引号内容」加粗（中文直角引号、弯引号、英文引号）
     s = s.replace(/「([^」]+)」/g, '<strong>「$1」</strong>');
+    s = s.replace(/“([^”]+)”/g, '<strong>“$1”</strong>');
     s = s.replace(/"([^"]+)"/g, '<strong>"$1"</strong>');
     // 常见关键语义词组加粗（签文解读中的高频核心词）
     var keyPatterns = [
