@@ -690,7 +690,6 @@ Page({
     }
 
     const data = { action: 'createShare', snapshot: snapshot, token: token }
-    if (this.data._shareId) data.shareId = this.data._shareId
 
     wx.cloud.callFunction({ name: 'jieqian', data: data }).then(res => {
       if (res.result && res.result.code === 0 && res.result.shareId) {

@@ -20,12 +20,14 @@
  *        localMode=true 纯本地模式(隐藏输入框/不登录/不连远程解读); false=完整功能(需登录才可用AI)
  *        说明：loginRequired / promoEnabled 已取消——登录门槛与首页引流卡片均由 localMode 派生
  *   - shares: { _id(shareId), signId, level, poemText, basic:{career,love,wealth,health},
- *              chats:[{role,content}], uid, account, createdAt, expireAt }
- *        shareId=10位混淆短码(主键)；expireAt=过期时间戳(24h)；getShareById 只读读取、不校验 token
+ *              chats:[{role,content}], uid, account, nickname, createdAt, expireAt }
+ *        shareId=10位混淆短码(主键)，由 uid+signId 确定性生成，同一用户同一签文只存一份；
+ *        expireAt=过期时间戳(24h)，每次分享会刷新；getShareById 只读读取、不校验 token
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
@@ -45,6 +47,15 @@ function genShareId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
   let s = ''
   for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  return s
+}
+
+// 同一用户同一签文生成确定性 shareId，避免数据库出现重复分享记录
+function getShareIdByUidSign(uid, signId) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const hash = crypto.createHash('sha256').update(uid + ':' + String(signId)).digest()
+  let s = ''
+  for (let i = 0; i < 10; i++) s += chars[hash[i] % chars.length]
   return s
 }
 
@@ -487,9 +498,8 @@ exports.main = async function(event, context) {
       const snap = event.snapshot || {}
       if (!snap.signId) return { code: 1, msg: '缺少签号' }
 
-      // 生成或复用 shareId
-      let shareId = event.shareId || ''
-      if (!shareId) shareId = genShareId()
+      // 同一用户同一签文使用确定性 shareId，避免重复分享记录
+      const shareId = getShareIdByUidSign(caller._id, snap.signId)
 
       const now = Date.now()
       const doc = {
