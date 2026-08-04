@@ -1,7 +1,12 @@
 {
   "description": "阿鹏趣签 - 微信原生小程序 + 微信云开发",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "file",
+        "value": "NATIVE_GUIDE.md"
+      }
+    ],
     "include": []
   },
   "setting": {

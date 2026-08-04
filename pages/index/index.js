@@ -66,14 +66,16 @@ Page({
     }
   },
 
-  // 扫一扫按钮：打开摄像头扫码，结果复制到剪贴板（换成标准二维码后，长按图片也可识别）
+  // 扫一扫按钮：打开摄像头扫码，结果直接展示（不复制剪贴板，避免隐私接口审核提示）
   onScanQrcode() {
     wx.scanCode({
       onlyFromCamera: false,
       success: (res) => {
-        wx.setClipboardData({
-          data: res.result,
-          success: () => wx.showToast({ title: '扫码结果已复制', icon: 'none' })
+        wx.showModal({
+          title: '扫码结果',
+          content: res.result,
+          showCancel: false,
+          confirmText: '知道了'
         });
       },
       fail: () => {}

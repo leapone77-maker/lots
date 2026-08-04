@@ -207,9 +207,9 @@ page {
 
 /* 福字：篆书图片（透明底金色字，避免设备缺字体不显示） */
 .tube-fu-img {
-  width: 114rpx;
-  height: 114rpx;
-  margin-top: 2rpx;
+  width: 148rpx;
+  height: 148rpx;
+  margin-top: 3rpx;
   z-index: 3;
 }
 

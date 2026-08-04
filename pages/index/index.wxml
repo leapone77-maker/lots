@@ -27,7 +27,7 @@
         </view>
       </view>
       <view class="tube-body">
-        <image class="tube-fu-img" src="/images/fu-zhuan-1.png" mode="aspectFit"/>
+        <image class="tube-fu-img" src="/images/fu-zhimang-1.png" mode="aspectFit"/>
       </view>
       <view class="tube-rim bottom-rim"></view>
       <view class="tube-base"></view>
