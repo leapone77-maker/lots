@@ -73,7 +73,7 @@
       </view>
       <image class="promo-qrcode" src="/images/qrcode-wechat.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
       <text class="promo-hint">长按识别二维码 → 亿点心意</text>
-      <button class="promo-scan-btn" bindtap="onScanQrcode">📷 扫一扫</button>
+      <text class="promo-hint-sub">(小程序里不支持直接扫码)</text>
     </view>
   </view>
 

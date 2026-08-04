@@ -66,22 +66,6 @@ Page({
     }
   },
 
-  // 扫一扫按钮：打开摄像头扫码，结果直接展示（不复制剪贴板，避免隐私接口审核提示）
-  onScanQrcode() {
-    wx.scanCode({
-      onlyFromCamera: false,
-      success: (res) => {
-        wx.showModal({
-          title: '扫码结果',
-          content: res.result,
-          showCancel: false,
-          confirmText: '知道了'
-        });
-      },
-      fail: () => {}
-    });
-  },
-
   /* ========== 动态导航栏（与胶囊对齐）========== */
   _initNavBar() {
     const menu = wx.getMenuButtonBoundingClientRect();

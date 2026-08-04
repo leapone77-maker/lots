@@ -397,16 +397,11 @@ page {
   letter-spacing: 1rpx;
 }
 
-.promo-scan-btn {
-  margin-top: 14rpx;
-  font-size: 22rpx;
-  color: #fff;
-  background: linear-gradient(135deg, #c9a961, #b8945a);
-  border-radius: 28rpx;
-  padding: 6rpx 36rpx;        /* 固定左右内边距，不再撑满 */
-  line-height: 1.6;
-  display: inline-block;       /* 覆盖 button 默认 block+100%宽 */
-  width: auto !important;      /* 强制不撑满 */
+.promo-hint-sub {
+  font-size: 18rpx;
+  color: rgba(160, 140, 110, 0.45);
+  margin-top: 6rpx;
+  letter-spacing: 0.5rpx;
 }
 
 .promo-divider {
