@@ -55,6 +55,8 @@ Page({
     this.checkLogin();
     this.loadLocalChat();
     this._loadSerifFont();
+    // 已登录的云模式用户进入详情页即预生成分享快照
+    if (!this.data.localMode && this.data.isLoggedIn) this._refreshShare();
 
     // 从历史页进入 → 尝试加载当天云端聊天记录
     if (historyDate && this.data.isLoggedIn) {
@@ -66,6 +68,7 @@ Page({
       this.appConfig = cfg;
       this.setData({ localMode: cfg.localMode !== false });  // 热更新本地模式开关
       this.checkLogin();
+      if (!this.data.localMode && this.data.isLoggedIn) this._refreshShare();  // 热更新后云模式+已登录则补生成快照
       // 热更新后如果刚登录且有历史日期，补拉聊天
       if (historyDate && this.data.isLoggedIn && this.data.chatMessages.length === 0) {
         this._loadCloudChat(historyDate);
@@ -182,6 +185,7 @@ Page({
     const userInfo = { account, token };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
+    this._refreshShare();   // 登录成功后预生成分享快照，保证首次分享即有效
     this.loadMemories();
     this.fetchQuota();
     wx.showToast({ title: '登录成功', icon: 'success' });
@@ -667,33 +671,24 @@ Page({
 
   /* ========== 分享 ========== */
 
-  // 预生成/刷新分享快照（签到页面就调用一次，后续聊天变化时再刷新）
+  // 预生成/刷新分享快照（仅已登录可用；本地模式或未登录不分享）
   _refreshShare(callback) {
     if (!this.data.hasDrawn) return
+    if (this.data.localMode) return            // 本地模式不分享
+    const token = this.data.userInfo && this.data.userInfo.token
+    if (!token) return                          // 仅已登录账号可分享（已去掉匿名分享）
     const q = this.data.qian || {}
     if (!q.id) return
 
-    const token = this.data.userInfo && this.data.userInfo.token
-    const anonId = token ? '' : (wx.getStorageSync('anonShareId') || '')
     const snapshot = {
       signId: q.id,
       level: q.level,
       poemText: q.poemText,
       basic: q.basic || null,
-      chats: this.data.chatMessages.map(m => ({ role: m.role, content: this._stripHtml(m.content) }))
+      chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
     }
 
-    const data = { action: 'createShare', snapshot: snapshot }
-    if (token) data.token = token
-    else {
-      // 本地模式用匿名 id，同一个设备复用同一个
-      let id = wx.getStorageSync('anonShareId')
-      if (!id) {
-        id = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-        wx.setStorageSync('anonShareId', id)
-      }
-      data.anonId = id
-    }
+    const data = { action: 'createShare', snapshot: snapshot, token: token }
     if (this.data._shareId) data.shareId = this.data._shareId
 
     wx.cloud.callFunction({ name: 'jieqian', data: data }).then(res => {
@@ -704,27 +699,31 @@ Page({
     }).catch(() => { if (callback) callback() })
   },
 
-  // 分享按钮点击 → 先刷新快照，再触发微信原生分享面板
+  // 分享按钮点击：已登录→刷新快照并触发微信原生分享面板；未登录→弹登录框
   onShareTap() {
     if (!this.data.hasDrawn) return
-    this._refreshShare(() => {
-      // 快照生成后，用户点微信右上角 "..." 的转发按钮时 onShareAppMessage 会拿到最新 shareId
-    })
+    if (this.data.localMode) return            // 本地模式不分享（按钮本就不显示）
+    if (!this.data.isLoggedIn) {               // 未登录 → 弹登录框，登录后才能分享
+      this.setData({ showLogin: true })
+      return
+    }
+    this._refreshShare()                        // 已登录 → 刷新快照，原生分享面板由 open-type="share" 触发
   },
 
   // 微信原生分享菜单回调（右上角 "..." → 转发给朋友）
   onShareAppMessage() {
     const shareId = this.data._shareId || ''
+    const title = `阿鹏趣签·第${this.data.drawnId || ''}签`
     if (shareId) {
       return {
-        title: `阿鹏趣签·第${this.data.drawnId || ''}签`,
+        title: title,
         path: '/pages/share/share?shareId=' + shareId,
         imageUrl: '/images/jieqian-logo-peng.png'
       }
     }
-    // 兜底：还没生成快照就回首页
+    // 兜底：快照尚未生成，仍保持规范标题，路径回首页
     return {
-      title: '阿鹏趣签',
+      title: title,
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
     }

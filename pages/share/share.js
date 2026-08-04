@@ -25,12 +25,15 @@ Page({
     }).then(res => {
       if (res.result && res.result.code === 0) {
         const share = res.result.share
-        const chatMessages = (share.chats || []).map(m => ({
-          role: m.role,
-          content: m.role === 'user'
-            ? `<div style="color:#4a3728;font-size:14px;line-height:1.6;">${this._escHtml(m.content)}</div>`
-            : this._formatReply(m.content)
-        }))
+        const chatMessages = (share.chats || []).map(m => {
+          const isHtml = typeof m.content === 'string' && /<[a-z][\s\S]*>/i.test(m.content)
+          return {
+            role: m.role,
+            content: m.role === 'user'
+              ? `<div style="color:#4a3728;font-size:14px;line-height:1.6;">${this._escHtml(m.content)}</div>`
+              : (isHtml ? m.content : this._formatReply(m.content))
+          }
+        })
 
         this.setData({
           loading: false,

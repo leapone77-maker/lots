@@ -11,8 +11,11 @@
           <text class="qian-title">第 {{qian.id}} 签 · {{qian.level}}</text>
         </view>
         <!-- 分享按钮：用普通 view 做绝对定位容器，避免 button 默认 width:100% 干扰 -->
-        <view class="qian-share-wrap" wx:if="{{hasDrawn}}">
-          <button class="qian-share-btn" bindtap="onShareTap" open-type="share">
+        <view class="qian-share-wrap" wx:if="{{hasDrawn && !localMode}}">
+          <button wx:if="{{isLoggedIn}}" class="qian-share-btn" open-type="share" bindtap="onShareTap">
+            <image class="qian-share-icon" src="/images/share-icon.png" mode="aspectFit"/>
+          </button>
+          <button wx:else class="qian-share-btn" bindtap="onShareTap">
             <image class="qian-share-icon" src="/images/share-icon.png" mode="aspectFit"/>
           </button>
         </view>

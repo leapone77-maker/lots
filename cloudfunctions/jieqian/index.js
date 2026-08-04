@@ -476,11 +476,11 @@ exports.main = async function(event, context) {
     // ---- 生成只读分享快照（签运诗 + 聊天记录），24小时过期 ----
     // 前端把当前展示的数据组装成 snapshot 传过来，云函数只做存储，不暴露用户 token
     // 传 shareId 则更新该快照（同一会话只维护一个分享文档），否则新建
-    // 支持匿名：传 token 则绑定账号；不传 token 则用 anonId 生成匿名快照
+    // 必须登录：仅已登录账号可创建分享（已移除匿名分享）
     if (action === 'createShare') {
       const token = event.token || ''
-      const anonId = event.anonId || ''
       const caller = token ? await authByToken(token) : null
+      if (!caller) return { code: 401, msg: '请先登录后再分享' }
       const snap = event.snapshot || {}
       if (!snap.signId) return { code: 1, msg: '缺少签号' }
 
@@ -495,13 +495,13 @@ exports.main = async function(event, context) {
         poemText: snap.poemText || '',
         basic: snap.basic || null,
         chats: Array.isArray(snap.chats) ? snap.chats : [],
-        uid: caller ? caller._id : (anonId || 'anon'),
-        account: caller ? caller.account : (anonId ? '本地用户' : '匿名'),
+        uid: caller._id,
+        account: caller.account,
         createdAt: now,
         expireAt: now + 24 * 60 * 60 * 1000   // 24小时过期
       }
       await shares.doc(shareId).set({ data: doc })
-      console.log('[createShare] shareId=' + shareId + ' chats=' + doc.chats.length + (caller ? ' account=' + caller.account : ' anonId=' + anonId))
+      console.log('[createShare] shareId=' + shareId + ' chats=' + doc.chats.length + ' account=' + caller.account)
       return { code: 0, shareId: shareId }
     }
 
