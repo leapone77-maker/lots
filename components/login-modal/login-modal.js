@@ -5,6 +5,7 @@ Component({
   data: {
     account: '',
     password: '',
+    nickname: '',
     err: '',
     loading: false
   },
@@ -12,7 +13,7 @@ Component({
     'visible': function(val) {
       if (!val) {
         // 关闭时清空表单
-        this.setData({ account: '', password: '', err: '' });
+        this.setData({ account: '', password: '', nickname: '', err: '' });
       }
     }
   },
@@ -27,6 +28,9 @@ Component({
     onPwd: function(e) {
       this.setData({ password: e.detail.value });
     },
+    onNickname: function(e) {
+      this.setData({ nickname: e.detail.value });
+    },
     submit: function() {
       var self = this;
       this.setData({ err: '', loading: true });
@@ -39,6 +43,11 @@ Component({
         this.setData({ err: '密码至少 6 位', loading: false });
         return;
       }
+      var nick = (this.data.nickname || '').trim();
+      if (!nick || nick.length < 2 || nick.length > 12) {
+        this.setData({ err: '请输入 2-12 个字符的昵称', loading: false });
+        return;
+      }
 
       // 调用云函数 register/login（一次调用，结果直接传给页面）
       wx.cloud.callFunction({
@@ -46,7 +55,8 @@ Component({
         data: {
           action: 'register',
           account: self.data.account,
-          password: self.data.password
+          password: self.data.password,
+          nickname: nick
         }
       }).then(function(res) {
         console.log('[login] 云函数返回:', JSON.stringify(res));
@@ -63,7 +73,8 @@ Component({
           console.log('[login] token:', tk ? '有' : '无', ', 完整返回:', JSON.stringify(result));
           self.triggerEvent('login', {
             account: self.data.account,
-            token: tk
+            token: tk,
+            nickname: nick
           });
           self.close();
         } else {

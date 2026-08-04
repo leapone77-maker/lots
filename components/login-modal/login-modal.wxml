@@ -7,6 +7,7 @@
     <view class="dlg-hint">首次登录即自动注册</view>
     <input class="ipt" type="number" value="{{account}}" placeholder="请输入手机号" maxlength="11" bindinput="onAccount" />
     <input class="ipt" password value="{{password}}" placeholder="请设置/输入密码（至少6位）" bindinput="onPwd" />
+    <input class="ipt" value="{{nickname}}" placeholder="请输入昵称（2-12个字符）" maxlength="12" bindinput="onNickname" />
     <button class="dlg-btn" bindtap="submit">{{loading ? '登录中...' : '登录 / 注册'}}</button>
     <view wx:if="{{err}}" class="err">{{ err }}</view>
   </view>

@@ -243,6 +243,7 @@ exports.main = async function(event, context) {
     if (action === 'register') {
       var account = event.account
       var password = event.password
+      var nickname = (event.nickname || '').trim()
       if (!account || !/^1\d{10}$/.test(account)) return { code: 1, msg: '账号格式不正确' }
       if (!password) return { code: 1, msg: '请输入密码' }
 
@@ -251,8 +252,10 @@ exports.main = async function(event, context) {
 
       if (list.length === 0) {
         // 自动注册（直接返回生成的 token，不再二次查询）
+        if (!nickname || nickname.length < 2 || nickname.length > 12) {
+          return { code: 1, msg: '请输入 2-12 个字符的昵称' }
+        }
         var tk = genToken()
-        var nick = '福主' + account.slice(-4)
         console.log('[register] 开始新建用户 account=' + account)
         try {
           const addRes = await users.add({
@@ -260,7 +263,7 @@ exports.main = async function(event, context) {
               account: account,
               password: password,
               token: tk,
-              nickname: nick,
+              nickname: nickname,
               created: Date.now(),
               dailyLimit: 1,   // 每日可咨询次数上限（未来按会员身份设置不同值，免费=1）
               dialogCount: 0,  // 当日已咨询次数
@@ -494,6 +497,7 @@ exports.main = async function(event, context) {
         level: snap.level || '',
         poemText: snap.poemText || '',
         basic: snap.basic || null,
+        nickname: snap.nickname || '',
         chats: Array.isArray(snap.chats) ? snap.chats : [],
         uid: caller._id,
         account: caller.account,

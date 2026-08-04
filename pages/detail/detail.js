@@ -180,9 +180,9 @@ Page({
   },
 
   onLogin(e) {
-    const { account, token } = e.detail;
+    const { account, token, nickname } = e.detail;
     if (!token) return;
-    const userInfo = { account, token };
+    const userInfo = { account, token, nickname: nickname || '' };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     this._refreshShare();   // 登录成功后预生成分享快照，保证首次分享即有效
@@ -685,6 +685,7 @@ Page({
       level: q.level,
       poemText: q.poemText,
       basic: q.basic || null,
+      nickname: (this.data.userInfo && this.data.userInfo.nickname) || '',
       chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
     }
 

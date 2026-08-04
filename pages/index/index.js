@@ -230,12 +230,12 @@ Page({
   },
 
   onLogin(e) {
-    const { account, token } = e.detail;
+    const { account, token, nickname } = e.detail;
     if (!token) {
       wx.showToast({ title: '登录失败：未获取到凭证', icon: 'none' });
       return;
     }
-    const userInfo = { account, token };
+    const userInfo = { account, token, nickname: nickname || '' };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     wx.showToast({ title: '登录成功', icon: 'success' });

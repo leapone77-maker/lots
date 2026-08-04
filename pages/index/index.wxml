@@ -72,7 +72,7 @@
         </view>
       </view>
       <image class="promo-qrcode" src="/images/qrcode-wechat.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
-      <text class="promo-hint">长按保存二维码 → 喝胖阿鹏</text>
+      <text class="promo-hint">长按保存二维码 → 喝趴阿鹏</text>
       <text class="promo-hint-sub">(小程序里不支持扫收款码)</text>
     </view>
   </view>

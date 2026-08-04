@@ -27,11 +27,14 @@ Page({
         const share = res.result.share
         const chatMessages = (share.chats || []).map(m => {
           const isHtml = typeof m.content === 'string' && /<[a-z][\s\S]*>/i.test(m.content)
+          if (isHtml) {
+            return { role: m.role, content: m.content }
+          }
           return {
             role: m.role,
             content: m.role === 'user'
               ? `<div style="color:#4a3728;font-size:14px;line-height:1.6;">${this._escHtml(m.content)}</div>`
-              : (isHtml ? m.content : this._formatReply(m.content))
+              : this._formatReply(m.content)
           }
         })
 
