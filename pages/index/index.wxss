@@ -356,10 +356,14 @@ page {
   box-shadow: 0 4rpx 16rpx rgba(120, 85, 50, 0.08);
 }
 
+.promo-card:last-child {
+  flex: 1.08;             /* 右侧充电卡稍微加宽，让第二行标题单行显示 */
+}
+
 .promo-header {
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  gap: 4rpx;
   margin-bottom: 16rpx;
 }
 
@@ -379,7 +383,7 @@ page {
   font-size: 24rpx;
   color: #5C4A32;
   font-weight: 600;
-  letter-spacing: 1rpx;
+  letter-spacing: 0;
 }
 
 .promo-qrcode {
