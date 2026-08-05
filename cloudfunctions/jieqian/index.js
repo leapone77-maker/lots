@@ -22,7 +22,7 @@
  *   - shares: { _id(shareId), signId, level, poemText, basic:{career,love,wealth,health},
  *              chats:[{role,content}], uid, account, nickname, createdAt, expireAt }
  *        shareId=10位混淆短码(主键)，由 uid+signId 确定性生成，同一用户同一签文只存一份；
- *        expireAt=过期时间戳(24h)，每次分享会刷新；getShareById 只读读取、不校验 token
+ *        expireAt=过期时间戳(72h)，每次分享会刷新；getShareById 只读读取、不校验 token
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -487,7 +487,7 @@ exports.main = async function(event, context) {
       }
     }
 
-    // ---- 生成只读分享快照（签运诗 + 聊天记录），24小时过期 ----
+    // ---- 生成只读分享快照（签运诗 + 聊天记录），72小时过期 ----
     // 前端把当前展示的数据组装成 snapshot 传过来，云函数只做存储，不暴露用户 token
     // 传 shareId 则更新该快照（同一会话只维护一个分享文档），否则新建
     // 必须登录：仅已登录账号可创建分享（已移除匿名分享）
@@ -512,7 +512,7 @@ exports.main = async function(event, context) {
         uid: caller._id,
         account: caller.account,
         createdAt: now,
-        expireAt: now + 24 * 60 * 60 * 1000   // 24小时过期
+        expireAt: now + 72 * 60 * 60 * 1000   // 72小时过期
       }
       await shares.doc(shareId).set({ data: doc })
       console.log('[createShare] shareId=' + shareId + ' chats=' + doc.chats.length + ' account=' + caller.account)

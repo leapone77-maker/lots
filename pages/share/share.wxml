@@ -11,7 +11,7 @@
     <view wx:elif="{{expired}}" class="status-container">
       <text class="status-icon">⏰</text>
       <text class="status-title">分享已过期</text>
-      <text class="status-desc">该分享链接已超过24小时有效期</text>
+      <text class="status-desc">请返回首页抽签哦</text>
       <button class="action-btn" bindtap="goHome">返回首页抽签</button>
     </view>
 
