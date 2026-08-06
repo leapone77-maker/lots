@@ -4,11 +4,12 @@
 
 function getBeijingDateStr() {
   const now = new Date();
-  // 本地时间 → UTC 毫秒
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  // UTC 毫秒 + 8 小时 = 北京时间墙钟
-  const beijing = new Date(utcMs + 8 * 3600000);
-  return beijing.toISOString().slice(0, 10); // YYYY-MM-DD（北京时间）
+  // Date.now()/getTime() 是 UTC 毫秒数，直接 +8 小时即北京时间墙钟
+  const beijing = new Date(now.getTime() + 8 * 3600000);
+  const y = beijing.getUTCFullYear();
+  const m = String(beijing.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(beijing.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 module.exports = { getBeijingDateStr };
