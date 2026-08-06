@@ -101,5 +101,7 @@
   <login-modal visible="{{showLogin}}" bind:close="onCloseLogin" bind:login="onLogin"/>
 
   <!-- 屏幕中间 toast 提示（分享成功等） -->
-  <center-toast visible="{{centerToast.show}}" message="{{centerToast.text}}"/>
+  <view class="center-toast-mask" wx:if="{{centerToast.rendered}}" style="{{centerToast.boxStyle}}">
+    <view class="center-toast-box">{{centerToast.text}}</view>
+  </view>
 </view>

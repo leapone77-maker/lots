@@ -16,7 +16,7 @@ Page({
     localMode: true,       // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
     remainCount: null,     // 当日剩余咨询次数（null=不适用/未登录/本地模式）
     dailyLimit: 1,         // 当日基础上限（1=基础；分享成功后临时为2），用于判断是否显示分享引导
-    centerToast: { show: false, text: '' }  // 屏幕中间 toast
+    centerToast: { show: false, text: '' }  // 屏幕中间 toast（内联实现）
   },
 
   onLoad(options) {
@@ -750,12 +750,46 @@ Page({
     }).catch(() => {})
   },
 
-  // 屏幕中间弹出提示，2 秒后自动上滑消失
+  // 屏幕中间弹出提示，2 秒后自动上滑消失（内联实现，替代原 center-toast 组件）
   showCenterToast(text) {
-    this.setData({ centerToast: { show: true, text: text } })
     if (this._toastTimer) clearTimeout(this._toastTimer)
-    this._toastTimer = setTimeout(() => {
-      this.setData({ centerToast: { show: false, text: '' } })
+    if (this._toastAnimTimer) clearTimeout(this._toastAnimTimer)
+
+    // 1. 显示 + 淡入动画（300ms）
+    this.setData({
+      centerToast: { show: true, text: text, rendered: true, boxStyle: 'opacity:0;' }
+    })
+
+    const fadeInStart = Date.now()
+    this._toastTimer = setInterval(() => {
+      const elapsed = Date.now() - fadeInStart
+      const t = Math.min(elapsed / 300, 1)
+      const eased = 1 - Math.pow(1 - t, 3)
+      if (t >= 1) {
+        clearInterval(this._toastTimer)
+        this._toastTimer = null
+        this.setData({ centerToast: { ...this.data.centerToast, boxStyle: 'opacity:1;' } })
+      } else {
+        this.setData({ centerToast: { ...this.data.centerToast, boxStyle: `opacity:${eased};` } })
+      }
+    }, 16)
+
+    // 2. 停留 2 秒后上滑消失（400ms）
+    this._toastAnimTimer = setTimeout(() => {
+      const slideStart = Date.now()
+      this._toastTimer = setInterval(() => {
+        const elapsed = Date.now() - slideStart
+        const t = Math.min(elapsed / 400, 1)
+        const eased = 1 - Math.pow(1 - t, 3)
+        const translateY = -2000 * eased
+        if (t >= 1) {
+          clearInterval(this._toastTimer)
+          this._toastTimer = null
+          this.setData({ centerToast: { show: false, text: '', rendered: false, boxStyle: '' } })
+        } else {
+          this.setData({ centerToast: { ...this.data.centerToast, boxStyle: `opacity:1;transform:translateY(${translateY}rpx);` } })
+        }
+      }, 16)
     }, 2000)
   },
 
