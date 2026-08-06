@@ -1,0 +1,3 @@
+<view class="center-toast-mask" wx:if="{{rendered}}">
+  <view class="center-toast-box" style="{{boxStyle}}">{{message}}</view>
+</view>

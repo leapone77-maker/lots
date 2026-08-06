@@ -11,7 +11,7 @@
  *
  * 数据库集合（需在云开发控制台手动创建）：
  *   - users    : { _id, account, password, token, nickname, created, dailyLimit, dialogCount, dialogDate }
- *        dailyLimit=每日可咨询次数上限(免费会员默认1，付费会员后续设置N); dialogCount=当日已用次数; dialogDate=计数对应日期(北京时间)，跨天重置
+ *        dailyLimit=每日可咨询次数上限(默认1；用完基础次数后分享成功会临时升为2，跨天重置回1); dialogCount=当日已用次数; dialogDate=计数对应日期(北京时间)，跨天重置
  *   - memories: { _id, uid, account, tag, created }
  *        uid=关联 users._id；account=冗余存一份便于人工排查(非查询键)；tag=合并标签(分类+文本, 如"[life]2026年本命年")；created=北京时间字符串(如"2026-07-31 10:19:27")
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
@@ -88,7 +88,7 @@ async function resolveQuota(token) {
   if (onDate !== today) {
     used = 0
     onDate = today
-    await users.doc(caller._id).update({ data: { dialogCount: 0, dialogDate: today } })
+    await users.doc(caller._id).update({ data: { dialogCount: 0, dialogDate: today, dailyLimit: 1 } })
   }
   return { caller, used, limit, today, onDate }
 }
@@ -414,7 +414,7 @@ exports.main = async function(event, context) {
         console.log('[chat] 测试态，跳过配额统计')
       }
 
-      return { code: 0, content: reply, remain: remain }
+      return { code: 0, content: reply, remain: remain, dailyLimit: quota2.limit }
     }
 
     // ---- 查询当日剩余咨询次数（前端进入页面时展示）----
@@ -425,8 +425,27 @@ exports.main = async function(event, context) {
         return { code: 0, remain: null, limit: null }
       }
       var q = await resolveQuota(event.token)
-      if (!q) return { code: 401, remain: null, limit: null }
-      return { code: 0, remain: q.limit - q.used, limit: q.limit }
+      if (!q) return { code: 401, remain: null, dailyLimit: null }
+      return { code: 0, remain: q.limit - q.used, dailyLimit: q.limit }
+    }
+
+    // ---- 分享成功发放额外咨询次数（无新增字段，复用 dailyLimit）----
+    // 规则：仅当今天上限仍是基础值(1) 且 基础次数已用完(used>=1) 才发奖，把 dailyLimit 临时升为 2
+    // 用 where({_id, dailyLimit:1}) 条件更新，并发下也只 +1 次，避免快速重复点击刷次数
+    if (action === 'grantShareBonus') {
+      const caller = await authByToken(event.token)
+      if (!caller) return { code: 401, msg: '未登录' }
+      const q = await resolveQuota(event.token)  // 先确保跨天已重置（dailyLimit 回到 1）
+      if (!q) return { code: 401, remain: null, dailyLimit: null }
+      // 未到发奖条件：基础未用完 / 已领过奖励（dailyLimit 已为 2）
+      if (q.limit !== 1 || q.used < 1) {
+        return { code: 0, granted: false, remain: q.limit - q.used, dailyLimit: q.limit }
+      }
+      const _ = db.command
+      const upd = await users.where({ _id: caller._id, dailyLimit: 1 }).update({ data: { dailyLimit: 2 } })
+      const affected = (upd && upd.stats) ? upd.stats.updated : (upd ? upd.updated : 0)
+      const q2 = await resolveQuota(event.token)
+      return { code: 0, granted: affected > 0, remain: q2.limit - q2.used, dailyLimit: q2.limit }
     }
 
     // ---- 清空全部测试数据（users + memories）----

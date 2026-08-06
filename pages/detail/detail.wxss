@@ -280,6 +280,30 @@ page {
   letter-spacing: 1rpx;
 }
 
+/* 分享引导行（基础次数用完、未领奖励时显示） */
+.quota-guide {
+  display: block;
+  font-size: 24rpx;
+  color: rgba(168,32,26,0.72);
+  line-height: 1.6;
+}
+
+.quota-share-btn {
+  display: inline-block;
+  margin: 8rpx auto 0;
+  padding: 6rpx 28rpx;
+  background: #A8201A;
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 1.6;
+  border-radius: 999rpx;
+  border: none;
+}
+
+.quota-share-btn::after {
+  border: none;
+}
+
 .input-field {
   flex: 1;
   height: 88rpx;

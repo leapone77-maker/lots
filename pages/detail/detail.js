@@ -14,7 +14,9 @@ Page({
     _thinkingId: null,
     _hasShownBasic: true,  // 详情页自动展示解答，标记为已展示
     localMode: true,       // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
-    remainCount: null      // 当日剩余咨询次数（null=不适用/未登录/本地模式）
+    remainCount: null,     // 当日剩余咨询次数（null=不适用/未登录/本地模式）
+    dailyLimit: 1,         // 当日基础上限（1=基础；分享成功后临时为2），用于判断是否显示分享引导
+    centerToast: { show: false, text: '' }  // 屏幕中间 toast
   },
 
   onLoad(options) {
@@ -172,9 +174,9 @@ Page({
       data: { action: 'getQuota', token: token }
     }).then(res => {
       if (res.result && res.result.code === 0 && typeof res.result.remain === 'number') {
-        this.setData({ remainCount: res.result.remain })
+        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || 1 })
       } else {
-        this.setData({ remainCount: null })
+        this.setData({ remainCount: null, dailyLimit: 1 })
       }
     }).catch(() => { this.setData({ remainCount: null }) })
   },
@@ -391,7 +393,7 @@ Page({
       this._persistChat();
       // 更新当日剩余咨询次数
       if (typeof res.result?.remain === 'number') {
-        this.setData({ remainCount: res.result.remain });
+        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || this.data.dailyLimit });
       }
       // 云端记录当日聊天（仅登录且非本地模式）
       this._recordCloudChat(reply);
@@ -714,6 +716,7 @@ Page({
   onShareAppMessage() {
     const shareId = this.data._shareId || ''
     const title = `阿鹏趣签·第${this.data.drawnId || ''}签`
+    this.grantShareBonus()  // 进入转发流程即触发分享奖励（尽力而为，不阻塞面板）
     if (shareId) {
       return {
         title: title,
@@ -727,5 +730,33 @@ Page({
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-logo-peng.png'
     }
-  }
+  },
+
+  // 分享奖励发放：进入转发流程时调用（用户发起转发那一刻触发 onShareAppMessage）。
+  // 云函数侧校验发奖条件（基础已用完且当天未领过）并用条件更新防并发
+  grantShareBonus() {
+    const token = this.data.userInfo && this.data.userInfo.token
+    if (!token || this.data.localMode || !this.data.isLoggedIn) return
+    wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'grantShareBonus', token: token }
+    }).then(res => {
+      if (res.result && res.result.code === 0) {
+        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || this.data.dailyLimit })
+        if (res.result.granted) {
+          this.showCenterToast('分享成功，新获得 1 次咨询！')
+        }
+      }
+    }).catch(() => {})
+  },
+
+  // 屏幕中间弹出提示，2 秒后自动上滑消失
+  showCenterToast(text) {
+    this.setData({ centerToast: { show: true, text: text } })
+    if (this._toastTimer) clearTimeout(this._toastTimer)
+    this._toastTimer = setTimeout(() => {
+      this.setData({ centerToast: { show: false, text: '' } })
+    }, 2000)
+  },
+
 });

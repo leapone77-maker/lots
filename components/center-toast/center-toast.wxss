@@ -1,0 +1,26 @@
+.center-toast-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translateY(-200rpx);
+}
+
+.center-toast-box {
+  background: rgba(0, 0, 0, 0.82);
+  color: #ffffff;
+  border-radius: 16rpx;
+  padding: 32rpx 48rpx;
+  max-width: 70vw;
+  font-size: 30rpx;
+  text-align: center;
+  line-height: 1.5;
+  white-space: nowrap;
+  opacity: 1;
+}

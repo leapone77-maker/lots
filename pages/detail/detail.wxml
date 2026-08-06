@@ -79,6 +79,10 @@
   <view class="input-bar" wx:if="{{!localMode}}">
     <view class="quota-tip" wx:if="{{remainCount !== null}}">
       <text wx:if="{{remainCount > 0}}">今日还可咨询 {{remainCount}} 次</text>
+      <block wx:elif="{{dailyLimit === 1}}">
+        <text class="quota-guide">分享签运结果给朋友，可再获得 1 次咨询</text>
+        <button class="quota-share-btn" open-type="share" bindtap="onShareTap">去分享</button>
+      </block>
       <text wx:else>今日咨询次数已用完，明天再来找阿鹏 🙏</text>
     </view>
     <input class="input-field"
@@ -95,4 +99,7 @@
 
   <!-- 登录弹窗 -->
   <login-modal visible="{{showLogin}}" bind:close="onCloseLogin" bind:login="onLogin"/>
+
+  <!-- 屏幕中间 toast 提示（分享成功等） -->
+  <center-toast visible="{{centerToast.show}}" message="{{centerToast.text}}"/>
 </view>
