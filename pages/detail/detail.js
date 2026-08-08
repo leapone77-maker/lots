@@ -444,6 +444,33 @@ Page({
     })
   },
 
+  /* ========== 长按签诗卡片复制 ========== */
+  onLongPressQian() {
+    const q = this.data.qian
+    if (!q) return
+    const lines = []
+    lines.push('第 ' + q.id + ' 签 · ' + q.level)
+    lines.push('签诗：' + q.poemText)
+    if (q.basic) {
+      if (q.basic.career) lines.push('【事业】' + q.basic.career)
+      if (q.basic.love) lines.push('【感情】' + q.basic.love)
+      if (q.basic.wealth) lines.push('【财运】' + q.basic.wealth)
+      if (q.basic.health) lines.push('【健康】' + q.basic.health)
+    }
+    const text = lines.join('\n')
+    wx.showActionSheet({
+      itemList: ['复制'],
+      success: () => {
+        wx.setClipboardData({
+          data: text,
+          success: () => {
+            wx.showToast({ title: '已复制', icon: 'success', duration: 1500 })
+          }
+        })
+      }
+    })
+  },
+
   /* ========== 云端记录当日聊天（登录 + 非本地模式才写）========== */
   _recordCloudChat(reply) {
     const token = this.data.userInfo ? this.data.userInfo.token : ''
