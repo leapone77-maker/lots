@@ -54,7 +54,7 @@
       </view>
 
       <view class="card-tip" wx:if="{{!localMode}}">
-        <text>💬 如需更深入的个性化解读，请直接向阿鹏提问</text>
+        <text>💬 登录账号，可以得到更详细、更个性化的解读！</text>
       </view>
     </view>
 

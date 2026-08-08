@@ -164,8 +164,8 @@ page {
 }
 
 .card-tip text {
-  font-size: 23rpx;
-  color: #8a6d3b;
+  font-size: 26rpx;
+  color: #A8201A;
 }
 
 /* ===== 整体可滚动区域（签诗+解答+聊天 一起滚）===== */
