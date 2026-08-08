@@ -16,7 +16,8 @@ Page({
     localMode: true,       // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
     remainCount: null,     // 当日剩余咨询次数（null=不适用/未登录/本地模式）
     dailyLimit: 1,         // 当日基础上限（1=基础；分享成功后临时为2），用于判断是否显示分享引导
-    centerToast: { show: false, text: '' }  // 屏幕中间 toast（内联实现）
+    centerToast: { show: false, text: '' },  // 屏幕中间 toast（内联实现）
+    inputExpanded: false   // 输入框是否展开为大文本域
   },
 
   onLoad(options) {
@@ -238,6 +239,15 @@ Page({
     } else {
       this.setData({ showLogin: false });
     }
+  },
+
+  /* ========== 输入框展开/收起 ========== */
+  onExpand() {
+    this.setData({ inputExpanded: true });
+  },
+
+  onCollapse() {
+    this.setData({ inputExpanded: false });
   },
 
   /* ========== 消息发送核心逻辑 ========== */

@@ -85,15 +85,41 @@
       </block>
       <text wx:else>今日咨询次数已用完，明天再来找阿鹏 🙏</text>
     </view>
-    <input class="input-field"
-           placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
-           value="{{inputValue}}"
-           bindinput="onInput"
-           confirm-type="send"
-           bindconfirm="sendMessage"
-           adjust-position="{{true}}"/>
-    <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="sendMessage">
-      <text>咨询阿鹏</text>
+
+    <!-- 展开的大输入框面板（浮在输入栏上方） -->
+    <view class="expand-panel" wx:if="{{inputExpanded}}">
+      <view class="expand-toolbar">
+        <view class="expand-collapse" bindtap="onCollapse">
+          <image class="expand-icon-svg" src="/images/icon-shouqi.png" mode="aspectFit"/>
+        </view>
+        <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="sendMessage">
+          <text>咨询阿鹏</text>
+        </view>
+      </view>
+      <textarea class="expand-textarea"
+                maxlength="300"
+                placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
+                value="{{inputValue}}"
+                bindinput="onInput"
+                show-confirm-bar="{{false}}"/>
+    </view>
+
+    <!-- 底部单行输入栏（展开时隐藏） -->
+    <view class="input-row" wx:if="{{!inputExpanded}}">
+      <view class="expand-icon" wx:if="{{!inputExpanded}}" bindtap="onExpand">
+        <image class="expand-icon-svg" src="/images/icon-zhankai.png" mode="aspectFit"/>
+      </view>
+      <input class="input-field"
+             maxlength="300"
+             placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
+             value="{{inputValue}}"
+             bindinput="onInput"
+             confirm-type="send"
+             bindconfirm="sendMessage"
+             adjust-position="{{true}}"/>
+      <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="sendMessage">
+        <text>咨询阿鹏</text>
+      </view>
     </view>
   </view>
 
