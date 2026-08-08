@@ -263,11 +263,12 @@ exports.main = async function(event, context) {
 
       if (list.length === 0) {
         // 自动注册（直接返回生成的 token，不再二次查询）
+        // 昵称选填：不填则自动生成"鹏友"+手机尾号后4位
         if (!nickname || nickname.length < 2 || nickname.length > 12) {
-          return { code: 1, msg: '请输入 2-12 个字符的昵称' }
+          nickname = '鹏友' + account.slice(-4)
         }
         var tk = genToken()
-        console.log('[register] 开始新建用户 account=' + account)
+        console.log('[register] 开始新建用户 account=' + account + ' nickname=' + nickname)
         try {
           const addRes = await users.add({
             data: {
@@ -286,7 +287,7 @@ exports.main = async function(event, context) {
           console.error('[register] 写入数据库失败:', addErr.message || addErr)
           return { code: 500, msg: '注册失败，请稍后重试' }
         }
-        return { code: 0, token: tk }
+        return { code: 0, token: tk, nickname: nickname }
 
       } else {
         // 已有账号，验证密码
@@ -294,8 +295,14 @@ exports.main = async function(event, context) {
         if (user.password !== password) return { code: 1, msg: '密码错误' }
         // 刷新 token 并直接返回新 token
         var newTk = genToken()
-        await users.doc(user._id).update({ data: { token: newTk } })
-        return { code: 0, token: newTk }
+        // 昵称规则：有填新的则更新，没填则保留原有的
+        var updateData = { token: newTk }
+        if (nickname) {
+          updateData.nickname = nickname
+        }
+        await users.doc(user._id).update({ data: updateData })
+        var finalNick = nickname || user.nickname || ('鹏友' + account.slice(-4))
+        return { code: 0, token: newTk, nickname: finalNick }
       }
     }
 

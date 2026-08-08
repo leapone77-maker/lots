@@ -44,10 +44,6 @@ Component({
         return;
       }
       var nick = (this.data.nickname || '').trim();
-      if (!nick || nick.length < 2 || nick.length > 12) {
-        this.setData({ err: '请输入 2-12 个字符的昵称', loading: false });
-        return;
-      }
 
       // 调用云函数 register/login（一次调用，结果直接传给页面）
       wx.cloud.callFunction({
@@ -70,11 +66,13 @@ Component({
 
         if (result.code === 0) {
           var tk = result.token || '';
+          // 用云端返回的昵称（可能自动生成了"鹏友+尾号"），否则用本地填写的
+          var finalNick = (result.nickname || nick || '');
           console.log('[login] token:', tk ? '有' : '无', ', 完整返回:', JSON.stringify(result));
           self.triggerEvent('login', {
             account: self.data.account,
             token: tk,
-            nickname: nick
+            nickname: finalNick
           });
           self.close();
         } else {

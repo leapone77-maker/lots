@@ -220,12 +220,14 @@ Page({
       const pendingMsg = {
         id: Date.now(),
         role: 'user',
+        rawText: q,
         content: '<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(q) + '</div>'
       };
       const replyMsg = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 请先登录，阿鹏才能记得您的故事</div>'
+        rawText: '请先登录，阿鹏才能记得您的故事',
+        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;"> 请先登录，阿鹏才能记得您的故事</div>'
       };
       this.setData({
         showLogin: false,
@@ -250,6 +252,7 @@ Page({
     const userMsg = {
       id: Date.now(),
       role: 'user',
+      rawText: content,
       content: '<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(content) + '</div>'
     };
 
@@ -258,6 +261,7 @@ Page({
       const tipMsg = {
         id: Date.now() + 1,
         role: 'assistant',
+        rawText: '请先返回首页抽一签...',
         content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 请先返回首页抽一签...</div>'
       };
       this.setData({
@@ -296,6 +300,7 @@ Page({
       const localTip = {
         id: Date.now() + 2,
         role: 'assistant',
+        rawText: '当前为本地模式，暂不支持在线咨询。签诗与解答均为本地预置数据，感谢您的使用。',
         content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;">🙏 当前为本地模式，暂不支持在线咨询。签诗与解答均为本地预置数据，感谢您的使用。</div>'
       };
       this._replaceThinking(localTip);
@@ -377,6 +382,7 @@ Page({
         const errMsg = {
           id: Date.now() + 1,
           role: 'assistant',
+          rawText: '阿鹏暂时无法解答：' + errText,
           content: '<div style="color:#c0392b;font-size:13px;line-height:1.6;">⚠️ 阿鹏暂时无法解答：' + this._escHtml(errText) + '</div>'
         };
         this._replaceThinking(errMsg);
@@ -387,6 +393,7 @@ Page({
       const interpMsg = {
         id: Date.now() + 1,
         role: 'assistant',
+        rawText: reply,
         content: this.formatReply(reply)
       };
       this._replaceThinking(interpMsg);
@@ -402,11 +409,29 @@ Page({
       const errMsg = {
         id: Date.now() + 1,
         role: 'assistant',
+        rawText: '调用失败：' + (err.errMsg || err.message || '未知错误'),
         content: '<div style="color:#c0392b;font-size:13px;line-height:1.6;">⚠️ 调用失败：' + this._escHtml(err.errMsg || err.message || '未知错误') + '</div>'
       };
       this._replaceThinking(errMsg);
       this._persistChat();
     });
+  },
+
+  /* ========== 长按消息复制 ========== */
+  onLongPressMsg(e) {
+    const rawText = e.currentTarget.dataset.rawtext
+    if (!rawText) return
+    wx.showActionSheet({
+      itemList: ['复制'],
+      success: () => {
+        wx.setClipboardData({
+          data: rawText,
+          success: () => {
+            wx.showToast({ title: '已复制', icon: 'success', duration: 1500 })
+          }
+        })
+      }
+    })
   },
 
   /* ========== 云端记录当日聊天（登录 + 非本地模式才写）========== */
