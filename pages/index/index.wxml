@@ -65,14 +65,14 @@
     <view class="promo-divider"></view>
     <view class="promo-card">
       <view class="promo-header">
-        <text class="promo-icon">💬</text>
+        <text class="promo-icon">📢</text>
         <view class="promo-title-wrap">
-          <text class="promo-title">添加「阿鹏」为友📲</text>
-          <text class="promo-title">一签解千愁, 一友聚相逢</text>
+          <text class="promo-title">关注「阿鹏趣聚」</text>
+          <text class="promo-title">公众号</text>
         </view>
       </view>
-      <image class="promo-qrcode" src="/images/ipcode-wechat.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
-      <text class="promo-hint">长按识别二维码 → 加为好友</text>
+      <image class="promo-qrcode" src="/images/qrcode-qj.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}"/>
+      <text class="promo-hint">长按识别二维码 → 关注公众号</text>
     </view>
   </view>
 
