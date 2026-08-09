@@ -147,6 +147,9 @@ Page({
     } else if (this.data.localMode) {
       // 纯本地模式：无需登录，视为已登录（仅本地记忆），不弹登录框、不强制登录
       this.setData({ isLoggedIn: true });
+    } else {
+      // 云模式但无账号 → 未登录，后续 sendMessage 会弹登录框
+      this.setData({ isLoggedIn: false });
     }
   },
 
@@ -227,8 +230,8 @@ Page({
       const replyMsg = {
         id: Date.now() + 1,
         role: 'assistant',
-        rawText: '请先登录，阿鹏才能记得您的故事',
-        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;"> 请先登录，阿鹏才能记得您的故事</div>'
+        rawText: '请先登录，每一签的记忆才能为你保留，才能更读懂你的故事，解锁更多专属解读。',
+        content: '<div style="color:#A8201A;font-size:13px;line-height:1.6;"> 请先登录，每一签的记忆才能为你保留，才能更读懂你的故事，解锁更多专属解读。</div>'
       };
       this.setData({
         showLogin: false,
