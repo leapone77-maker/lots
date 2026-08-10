@@ -1,5 +1,6 @@
 const { getBeijingDateStr } = require('../../utils/dateUtil.js');
 const config = require('../../utils/config.js');
+const { convertEmoji } = require('../../utils/emoji.js');
 
 Page({
   data: {
@@ -266,7 +267,7 @@ Page({
       id: Date.now(),
       role: 'user',
       rawText: content,
-      content: '<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(content) + '</div>'
+      content: '<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(convertEmoji(content)) + '</div>'
     };
 
     // 未抽签 → 提示
@@ -510,7 +511,7 @@ Page({
         id: Date.now() + i,
         role: m.role,
         content: m.role === 'user'
-          ? ('<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(m.content) + '</div>')
+          ? ('<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(convertEmoji(m.content)) + '</div>')
           : this.formatReply(m.content)
       }))
       this.setData({
