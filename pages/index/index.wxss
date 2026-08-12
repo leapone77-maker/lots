@@ -333,6 +333,36 @@ page {
   text-shadow: 0 1rpx 2rpx rgba(168, 32, 26, 0.15);
 }
 
+/* ===== 开签撒花粒子层 ===== */
+.confetti-canvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 600;
+  pointer-events: none;
+}
+
+/* 数字逐位弹出（整体 spring 已由 .floating-sign 提供，这里补逐位 stagger） */
+.floating-sign.show .sign-digit {
+  display: inline-block;
+  animation: digitPop 0.42s ease both;
+}
+@keyframes digitPop {
+  0% { transform: translateY(12rpx) scale(0.4); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* 签等级发光一闪 */
+.floating-sign.show .sign-level {
+  animation: levelGlow 0.9s ease both;
+}
+@keyframes levelGlow {
+  0%, 100% { text-shadow: 0 1rpx 2rpx rgba(168, 32, 26, 0.15); }
+  45% { text-shadow: 0 0 14rpx rgba(255, 190, 90, 0.95); }
+}
+
 /* ===== 引流卡片区（公众号 + 个人微信，localMode=false 时显示，贴底） ===== */
 .promo-section {
   display: flex;

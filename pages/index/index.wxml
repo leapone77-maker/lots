@@ -39,8 +39,8 @@
     <view class="big-stick">
       <view class="sign-vertical">
         <text class="sign-char">第</text>
-        <block wx:for="{{drawnIdChars}}" wx:key="*this">
-          <text class="sign-char sign-digit">{{item}}</text>
+        <block wx:for="{{drawnIdChars}}" wx:key="*this" wx:for-index="di">
+          <text class="sign-char sign-digit" style="animation-delay:{{di * 0.08 + 0.12}}s">{{item}}</text>
         </block>
         <text class="sign-char">号</text>
       </view>
@@ -48,6 +48,9 @@
       <text class="sign-level">{{drawnLevel}}</text>
     </view>
   </view>
+
+  <!-- 开签撒花粒子层（全屏覆盖，常驻，绘制时显示） -->
+  <canvas type="2d" id="confettiCanvas" class="confetti-canvas"></canvas>
 
   <!-- 引流卡片区（公众号 + 个人微信）：localMode=false 时显示 -->
   <view class="promo-section" wx:if="{{!localMode}}">

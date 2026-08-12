@@ -32,6 +32,108 @@ Page({
     });
     this.checkLogin();
     this._loadSerifFont();
+    // 抽签音效（竹签碰撞声，本地音频）
+    this._drawAudio = wx.createInnerAudioContext();
+    this._drawAudio.src = 'audio/draw_shake.mp3';
+    // 开签铃声（清脆 bling，本地音频）
+    this._blingAudio = wx.createInnerAudioContext();
+    this._blingAudio.src = 'audio/bling.mp3';
+  },
+
+  onReady() {
+    this._initConfettiCanvas();
+  },
+
+  _initConfettiCanvas() {
+    const q = wx.createSelectorQuery();
+    q.select('#confettiCanvas').fields({ node: true, size: true }).exec((res) => {
+      if (!res || !res[0] || !res[0].node) return;
+      const canvas = res[0].node;
+      const ctx = canvas.getContext('2d');
+      const info = (wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync());
+      const dpr = info.pixelRatio || 1;
+      canvas.width = res[0].width * dpr;
+      canvas.height = res[0].height * dpr;
+      ctx.scale(dpr, dpr);
+      this._confettiNode = canvas;
+      this._confettiCtx = ctx;
+      this._confettiW = res[0].width;
+      this._confettiH = res[0].height;
+    });
+  },
+
+  launchConfetti() {
+    if (this._confettiRunning) return;
+    const canvas = this._confettiNode;
+    const ctx = this._confettiCtx;
+    if (!canvas || !ctx) return;
+    this._confettiRunning = true;
+    const W = this._confettiW || 300;
+    const H = this._confettiH || 600;
+    const cx = W / 2;
+    const cy = H * 0.4;
+    const colors = ['#EF9F27', '#D85A30', '#D4537E', '#378ADD', '#639922', '#7F77DD', '#E24B4A', '#F59E0B'];
+    const ps = [];
+    for (let i = 0; i < 64; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = (0.012 + Math.random() * 0.012) * Math.max(W, H);
+      ps.push({
+        x: cx, y: cy,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp,
+        size: 4 + Math.random() * 7,
+        color: colors[i % colors.length],
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.35,
+        shape: Math.random() < 0.45 ? 1 : 0
+      });
+    }
+    const dur = 1000;
+    const start = Date.now();
+    const step = () => {
+      const t = Date.now() - start;
+      const prog = t / dur;
+      ctx.clearRect(0, 0, W, H);
+      let alive = false;
+      for (const p of ps) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        const a = Math.max(0, 1 - prog);
+        if (a > 0.01) alive = true;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        if (p.shape === 0) {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const s = p.size;
+          ctx.beginPath();
+          ctx.moveTo(0, -s);
+          ctx.lineTo(s * 0.25, -s * 0.25);
+          ctx.lineTo(s, 0);
+          ctx.lineTo(s * 0.25, s * 0.25);
+          ctx.lineTo(0, s);
+          ctx.lineTo(-s * 0.25, s * 0.25);
+          ctx.lineTo(-s, 0);
+          ctx.lineTo(-s * 0.25, -s * 0.25);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      if (t < dur && alive) {
+        canvas.requestAnimationFrame(step);
+      } else {
+        ctx.clearRect(0, 0, W, H);
+        this._confettiRunning = false;
+      }
+    };
+    canvas.requestAnimationFrame(step);
   },
 
   // 从详情页 navigateBack 返回时，首页不会被销毁、onLoad 不重跑，
@@ -146,6 +248,13 @@ Page({
 
     this.setData({ isShaking: true, floatingSign: false });
 
+    // 播放抽签音效（竹签碰撞声）
+    if (this._drawAudio) {
+      this._drawAudio.stop();
+      this._drawAudio.seek(0);
+      this._drawAudio.play();
+    }
+
     // 阶段1：摇晃 2.0s
     setTimeout(() => {
       this.setData({ isShaking: false, isFlying: true });
@@ -201,6 +310,17 @@ Page({
         drawnLevel: qian.level,
         canDraw: false
       });
+
+      // 开签仪式感：清脆铃声 + 轻震 + 撒花粒子
+      if (this._blingAudio) {
+        this._blingAudio.stop();
+        this._blingAudio.seek(0);
+        this._blingAudio.play();
+      }
+      try { wx.vibrateShort({ type: 'light' }); } catch (e1) {
+        try { wx.vibrateShort(); } catch (e2) {}
+      }
+      this.launchConfetti();
 
       // 悬浮签 2 秒后自动隐藏
       setTimeout(() => this.setData({ floatingSign: false }), 2000);
