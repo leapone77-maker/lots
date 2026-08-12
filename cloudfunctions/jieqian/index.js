@@ -22,7 +22,7 @@
  *   - shares: { _id(shareId), signId, level, poemText, basic:{career,love,wealth,health},
  *              chats:[{role,content}], uid, account, nickname, createdAt, expireAt }
  *        shareId=10位混淆短码(主键)，由 uid+signId 确定性生成，同一用户同一签文只存一份；
- *        expireAt=过期时间戳(72h)，每次分享会刷新；getShareById 只读读取、不校验 token
+ *        expireAt=过期时间戳(7天=7*24h)，每次分享会刷新；getShareById 只读读取、不校验 token；另有定时触发器 cleanExpiredShares 每天物理删除过期记录
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -64,6 +64,16 @@ async function authByToken(token) {
   const res = await users.where({ token }).get()
   if (res.data && res.data.length) return res.data[0]
   return null
+}
+
+// 定时清理：物理删除 shares 集合中 expireAt 已过期的分享快照（每日定时触发器触发）
+async function cleanExpiredShares() {
+  const _ = db.command
+  const now = Date.now()
+  const r = await shares.where({ expireAt: _.lt(now) }).remove()
+  const removed = (r && r.stats) ? r.stats.removed : 0
+  console.log('[cleanExpiredShares] removed=' + removed + ' before=' + new Date(now).toISOString())
+  return { code: 0, removed: removed }
 }
 
 // 北京时间日期字符串（用于每日配额按北京 0 点重置）
@@ -253,6 +263,10 @@ async function callInterp(systemContent, userQuestion, chatHistory) {
 }
 
 exports.main = async function(event, context) {
+  // 定时触发器（config.json 中的 timer）每天触发：物理删除 shares 中已过期的分享快照
+  if (event && event.Type === 'timer') {
+    return await cleanExpiredShares()
+  }
   var action = event.action
 
   try {
@@ -519,7 +533,7 @@ exports.main = async function(event, context) {
       }
     }
 
-    // ---- 生成只读分享快照（签运诗 + 聊天记录），72小时过期 ----
+    // ---- 生成只读分享快照（签运诗 + 聊天记录），7天(7*24h)过期 ----
     // 前端把当前展示的数据组装成 snapshot 传过来，云函数只做存储，不暴露用户 token
     // 传 shareId 则更新该快照（同一会话只维护一个分享文档），否则新建
     // 必须登录：仅已登录账号可创建分享（已移除匿名分享）
@@ -544,7 +558,7 @@ exports.main = async function(event, context) {
         uid: caller._id,
         account: caller.account,
         createdAt: now,
-        expireAt: now + 72 * 60 * 60 * 1000   // 72小时过期
+        expireAt: now + 7 * 24 * 60 * 60 * 1000   // 7天(7*24h)过期
       }
       await shares.doc(shareId).set({ data: doc })
       console.log('[createShare] shareId=' + shareId + ' chats=' + doc.chats.length + ' account=' + caller.account)

@@ -1,0 +1,9 @@
+{
+  "triggers": [
+    {
+      "name": "cleanExpiredShares",
+      "type": "timer",
+      "config": "0 0 0 * * * *"
+    }
+  ]
+}
