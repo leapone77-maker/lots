@@ -144,7 +144,7 @@ Page({
     return {
       title: title,
       path: '/pages/share/share?shareId=' + (share ? share._id : ''),
-      imageUrl: '/images/jieqian-logo-peng.png'
+      imageUrl: '/images/jieqian-share-fu.png'
     }
   }
 })

@@ -301,7 +301,7 @@ Page({
     return {
       title: '阿鹏趣签 - 咨询历史',
       path: '/pages/index/index',
-      imageUrl: '/images/jieqian-logo-peng.png'
+      imageUrl: '/images/jieqian-share-fu.png'
     };
   }
 });

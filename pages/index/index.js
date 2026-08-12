@@ -377,14 +377,14 @@ Page({
     return {
       title: '阿鹏趣签 - 心诚则灵',
       path: '/pages/index/index',
-      imageUrl: '/images/jieqian-logo-peng.png'
+      imageUrl: '/images/jieqian-share-fu.png'
     };
   },
 
   onShareTimeline() {
     return {
       title: '阿鹏趣签 - 心诚则灵',
-      imageUrl: '/images/jieqian-logo-peng.png'
+      imageUrl: '/images/jieqian-share-fu.png'
     };
   }
 });

@@ -787,14 +787,14 @@ Page({
       return {
         title: title,
         path: '/pages/share/share?shareId=' + shareId,
-        imageUrl: '/images/jieqian-logo-peng.png'
+        imageUrl: '/images/jieqian-share-fu.png'
       }
     }
     // 兜底：快照尚未生成，仍保持规范标题，路径回首页
     return {
       title: title,
       path: '/pages/index/index',
-      imageUrl: '/images/jieqian-logo-peng.png'
+      imageUrl: '/images/jieqian-share-fu.png'
     }
   },
 
