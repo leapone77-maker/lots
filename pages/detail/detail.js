@@ -566,7 +566,7 @@ Page({
       if (numMatch) {
         var numPrefix = numMatch[1] + ' ' + numMatch[2] + '：';
         var numBody = numMatch[3];
-        parts.push('<div style="margin:12px 0 8px 0;line-height:1.85;font-size:13px;"><span style="color:#A8201A;font-weight:bold;font-size:14px;">' + numPrefix + '</span><span style="color:#444;">' + numBody + '</span></div>');
+        parts.push('<div style="margin:12px 0 8px 0;line-height:1.85;font-size:14px;"><span style="color:#A8201A;font-weight:bold;font-size:14px;">' + numPrefix + '</span><span style="color:#444;">' + numBody + '</span></div>');
         continue;
       }
 
@@ -580,12 +580,12 @@ Page({
       if (/^(?:总的来说|总而言之|综上所述|总之|综上|一言以蔽之)[，,：:]/.test(t)) {
         hasSummaryDivider = true;
         parts.push('<div style="margin:18px 0 10px 0;border-top:1px solid rgba(168,32,26,0.15);"></div>');
-        parts.push('<div style="color:#555;margin:5px 0;line-height:1.85;font-size:13px;">' + t + '</div>');
+        parts.push('<div style="color:#555;margin:5px 0;line-height:1.85;font-size:14px;">' + t + '</div>');
         continue;
       }
 
       // 普通正文：深灰色，不再全红
-      parts.push('<div style="color:#444;margin:5px 0;line-height:1.85;font-size:13px;">' + t + '</div>');
+      parts.push('<div style="color:#444;margin:5px 0;line-height:1.85;font-size:14px;">' + t + '</div>');
     }
 
     // 兜底：最后一行若不是“总的来说/总之”等已加分隔线，则统一在文末总结前补一条分隔线

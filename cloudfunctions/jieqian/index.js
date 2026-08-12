@@ -121,7 +121,7 @@ async function readConfig() {
 /**
  * 身份锁定常量 —— 每次发送前校验，prompt 必须包含此身份，不可偏离
  */
-const EXPECTED_IDENTITY = '解签大师'
+const EXPECTED_IDENTITY = '阿鹏'
 
 /**
  * 单一来源：从 PROMPT.md 读取静态 System Prompt（身份 + 语气 + 格式要求）
@@ -132,7 +132,7 @@ try {
   BASE_PROMPT = fs.readFileSync(path.join(__dirname, 'PROMPT.md'), 'utf8').trim()
 } catch (e) {
   // 兜底：PROMPT.md 缺失时仍保证身份正确，避免以错误身份作答
-  BASE_PROMPT = '你是「解签大师」，一位隐居山林、精通易经卦象与签文的世外高人。\n你说话半文半白、温和而恳切，善于从签诗中读出求签人当下的处境与转机。'
+  BASE_PROMPT = '你是「阿鹏」，一位隐居山林、精通易经卦象与签文的世外高人。\n你说话半文半白、温和而恳切，善于从签诗中读出求签人当下的处境与转机。'
 }
 
 /**
@@ -230,11 +230,17 @@ async function callInterp(systemContent, userQuestion, chatHistory) {
       res.on('end', function() {
         try {
           var json = JSON.parse(data)
-          if (!json || !json.choices || !json.choices[0]) {
+          var replyText = ''
+          // 兼容两种返回格式：OpenAI 标准格式 和 阿里云部分模型旧版 { finish_reason, text }
+          if (json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) {
+            replyText = json.choices[0].message.content
+          } else if (json && json.text) {
+            replyText = json.text
+          } else {
             reject(new Error('远程解读服务返回异常：' + data.slice(0, 200)))
             return
           }
-          resolve(json.choices[0].message.content)
+          resolve(replyText)
         } catch(e) {
           reject(new Error('远程解读服务响应解析失败：' + data.slice(0, 200)))
         }
@@ -417,11 +423,11 @@ exports.main = async function(event, context) {
         await users.doc(quota2.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota2.today } })
         remain = quota2.limit - newUsed
         console.log('[chat] 配额累加完成 account=' + caller.account + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
+        return { code: 0, content: reply, remain: remain, dailyLimit: quota2.limit }
       } else {
         console.log('[chat] 测试态，跳过配额统计')
+        return { code: 0, content: reply, remain: null, dailyLimit: null }
       }
-
-      return { code: 0, content: reply, remain: remain, dailyLimit: quota2.limit }
     }
 
     // ---- 查询当日剩余咨询次数（前端进入页面时展示）----
