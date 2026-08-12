@@ -260,7 +260,7 @@ Page({
       this.setData({ isShaking: false, isFlying: true });
     }, 2000);
 
-    // 阶段2（2.8s）：飞签已飞出屏幕外 + 出结果 + 弹悬浮签
+    // 阶段2（2.6s）：飞签已飞出屏幕外 + 出结果 + 弹悬浮签
     setTimeout(() => {
       const qian = QIAN_DB[Math.floor(Math.random() * QIAN_DB.length)];
       const todayStr = getBeijingDateStr();
@@ -325,13 +325,13 @@ Page({
       // 悬浮签 2 秒后自动隐藏
       setTimeout(() => this.setData({ floatingSign: false }), 2000);
 
-      // 第3.0s：跳转详情页
+      // 第3.3s：跳转详情页
       setTimeout(() => {
         wx.navigateTo({
           url: `/pages/detail/detail?id=${qian.id}&level=${encodeURIComponent(qian.level)}`
         });
-      }, 200);
-    }, 2800);
+      }, 700);
+    }, 2600);
   },
 
   _saveMemory(content) {

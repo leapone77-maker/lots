@@ -62,7 +62,7 @@
     <view class="chat-messages">
       <view class="message {{item.role}}" wx:for="{{chatMessages}}" wx:key="id" id="msg-{{item.id}}">
         <view class="message-avatar">
-          <image wx:if="{{item.role === 'assistant'}}" class="avatar-logo" src="/images/jieqian-logo-peng.png" mode="aspectFit"/>
+          <image wx:if="{{item.role === 'assistant'}}" class="avatar-logo" src="/images/jieqian-icon-peng.png" mode="aspectFit"/>
           <text wx:elif="{{item.role === 'user'}}">我</text>
         </view>
         <view class="message-bubble" catchlongpress="onLongPressMsg" data-rawtext="{{item.rawText}}">
