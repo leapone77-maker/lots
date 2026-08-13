@@ -510,6 +510,7 @@ Page({
       const msgs = chats.map((m, i) => ({
         id: Date.now() + i,
         role: m.role,
+        rawText: m.content,
         content: m.role === 'user'
           ? ('<div style="color:#4a3728;font-size:14px;line-height:1.6;">' + this._escHtml(convertEmoji(m.content)) + '</div>')
           : this.formatReply(m.content)
