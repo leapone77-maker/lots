@@ -261,16 +261,18 @@ Page({
     const record = this.data.filteredRecords[idx];
     if (!record) return;
 
-    // 将该次签的数据写入缓存，跳转到详情页查看
+    // 用 QIAN_DB 补齐完整签诗（旧记录可能只存了 poemTitle）
+    const fullQian = QIAN_DB.find(x => x.id === record.id) || {};
+    const poemArr = fullQian.poem || [];
     const dateStr = record.date ? record.date.slice(0, 10) : '';
     wx.setStorageSync('cachedQian', {
       date: dateStr,
       id: record.id,
-      level: record.level,
-      poemText: '',
-      poemRaw: [],
-      basic: record.basic || null,
-      keywords: []
+      level: record.level || fullQian.level || '未知',
+      poemText: poemArr.join('，'),
+      poemRaw: poemArr,
+      basic: record.basic || fullQian.basic || null,
+      keywords: fullQian.keywords || []
     });
     wx.navigateTo({
       url: `/pages/detail/detail?id=${record.id}&level=${encodeURIComponent(record.level || '')}&date=${encodeURIComponent(dateStr)}`

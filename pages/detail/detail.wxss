@@ -109,10 +109,12 @@ page {
 
 .poem-text {
   display: block;
-  font-size: 29rpx;
+  font-size: 30rpx;
   color: #333;
-  line-height: 1.75;
-  letter-spacing: 1rpx;
+  line-height: 1.9;
+  letter-spacing: 3rpx;
+  font-weight: bold;
+  font-family: 'KaiTi', 'STKaiti', '楷体', 'SourceHanSerifSC', serif;
 }
 
 .card-divider {

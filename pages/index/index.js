@@ -285,6 +285,8 @@ Page({
         id: qian.id,
         level: qian.level,
         poemTitle: qian.poem[0] || '',
+        poemText: Array.isArray(qian.poem) ? qian.poem.join('，') : qian.poem,
+        poemRaw: qian.poem,
         basic: qian.basic
       });
       wx.setStorageSync('drawHistory', history.slice(0, 100));
