@@ -313,16 +313,18 @@ exports.main = async function(event, context) {
         // 已有账号，验证密码
         var user = list[0]
         if (user.password !== password) return { code: 1, msg: '密码错误' }
-        // 刷新 token 并直接返回新 token
-        var newTk = genToken()
-        // 昵称规则：有填新的则更新，没填则保留原有的
-        var updateData = { token: newTk }
-        if (nickname) {
-          updateData.nickname = nickname
+        // 复用已有 token（老账号无 token 字段时才新生成）
+        var tk = user.token
+        if (!tk) {
+          tk = genToken()
+          await users.doc(user._id).update({ data: { token: tk } })
         }
-        await users.doc(user._id).update({ data: updateData })
+        // 昵称规则：有填新的则更新，没填则保留原有的
+        if (nickname && nickname !== user.nickname) {
+          await users.doc(user._id).update({ data: { nickname: nickname } })
+        }
         var finalNick = nickname || user.nickname || ('鹏友' + account.slice(-4))
-        return { code: 0, token: newTk, nickname: finalNick }
+        return { code: 0, token: tk, nickname: finalNick }
       }
     }
 
