@@ -34,32 +34,22 @@
         </view>
 
         <view class="qian-poem-section">
-          <text class="poem-label">签诗</text>
+          <text class="poem-label">【签诗】</text>
           <text class="poem-text">{{share.poemText}}</text>
         </view>
 
         <view class="card-divider"></view>
 
         <view class="interpret-section" wx:if="{{share.basic}}">
-          <text class="interp-label">解答</text>
-          <view class="interp-items">
-            <view class="interp-item" wx:if="{{share.basic.career}}">
-              <text class="interp-tag">【事业】</text>
-              <text class="interp-val">{{share.basic.career}}</text>
-            </view>
-            <view class="interp-item" wx:if="{{share.basic.love}}">
-              <text class="interp-tag">【感情】</text>
-              <text class="interp-val">{{share.basic.love}}</text>
-            </view>
-            <view class="interp-item" wx:if="{{share.basic.wealth}}">
-              <text class="interp-tag">【财运】</text>
-              <text class="interp-val">{{share.basic.wealth}}</text>
-            </view>
-            <view class="interp-item" wx:if="{{share.basic.health}}">
-              <text class="interp-tag">【健康】</text>
-              <text class="interp-val">{{share.basic.health}}</text>
-            </view>
-          </view>
+          <text class="interp-label">【解签】</text>
+          <text class="basic-text">{{share.basic}}</text>
+        </view>
+
+        <view class="card-divider"></view>
+
+        <view class="yiji-section" wx:if="{{share.yiji}}">
+          <text class="yiji-label">【宜忌】</text>
+          <text class="yiji-text">{{share.yiji}}</text>
         </view>
       </view>
 

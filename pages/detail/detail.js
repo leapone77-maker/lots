@@ -456,10 +456,10 @@ Page({
     lines.push('第 ' + q.id + ' 签 · ' + q.level)
     lines.push('签诗：' + q.poemText)
     if (q.basic) {
-      if (q.basic.career) lines.push('【事业】' + q.basic.career)
-      if (q.basic.love) lines.push('【感情】' + q.basic.love)
-      if (q.basic.wealth) lines.push('【财运】' + q.basic.wealth)
-      if (q.basic.health) lines.push('【健康】' + q.basic.health)
+      lines.push('解签：' + q.basic)
+    }
+    if (q.yiji) {
+      lines.push('宜忌：' + q.yiji)
     }
     const text = lines.join('\n')
     wx.showActionSheet({
@@ -754,6 +754,7 @@ Page({
       level: q.level,
       poemText: q.poemText,
       basic: q.basic || null,
+      yiji: q.yiji || null,
       nickname: (this.data.userInfo && this.data.userInfo.nickname) || '',
       chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
     }

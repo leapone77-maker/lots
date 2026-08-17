@@ -19,7 +19,7 @@
  *        testMode=true 测试态(抽签无限次 + AI咨询无限次); false=正式(抽签每天1次, AI每天1次)
  *        localMode=true 纯本地模式(隐藏输入框/不登录/不连远程解读); false=完整功能(需登录才可用AI)
  *        说明：loginRequired / promoEnabled 已取消——登录门槛与首页引流卡片均由 localMode 派生
- *   - shares: { _id(shareId), signId, level, poemText, basic:{career,love,wealth,health},
+ *   - shares: { _id(shareId), signId, level, poemText, basic, yiji,
  *              chats:[{role,content}], uid, account, nickname, createdAt, expireAt }
  *        shareId=10位混淆短码(主键)，由 uid+signId 确定性生成，同一用户同一签文只存一份；
  *        expireAt=过期时间戳(7天=7*24h)，每次分享会刷新；getShareById 只读读取、不校验 token；另有定时触发器 cleanExpiredShares 每天物理删除过期记录
@@ -167,11 +167,7 @@ function buildSystemPrompt(qian, memList, question) {
     const poemText = Array.isArray(qian.poem) ? qian.poem.join('，') : (qian.poem || '')
     p += '\n签诗：' + poemText
     if (qian.basic) {
-      p += '\n\n基础解签：'
-      p += '\n事业：' + (qian.basic.career || '')
-      p += '\n感情：' + (qian.basic.love || '')
-      p += '\n财运：' + (qian.basic.wealth || '')
-      p += '\n健康：' + (qian.basic.health || '')
+      p += '\n\n基础解签：' + qian.basic
     }
   }
 
@@ -555,6 +551,7 @@ exports.main = async function(event, context) {
         level: snap.level || '',
         poemText: snap.poemText || '',
         basic: snap.basic || null,
+        yiji: snap.yiji || null,
         nickname: snap.nickname || '',
         chats: Array.isArray(snap.chats) ? snap.chats : [],
         uid: caller._id,

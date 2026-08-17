@@ -135,28 +135,30 @@ page {
   margin-bottom: 10rpx;
 }
 
-.interp-items {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
+.basic-text {
+  display: block;
+  font-size: 28rpx;
+  color: #555;
+  line-height: 1.7;
 }
 
-.interp-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2rpx;
+.yiji-section {
+  margin-top: 16rpx;
 }
 
-.interp-tag {
-  font-size: 25rpx;
+.yiji-label {
+  display: block;
+  font-size: 24rpx;
   color: #A8201A;
   font-weight: bold;
+  margin-bottom: 10rpx;
 }
 
-.interp-val {
-  font-size: 27rpx;
-  color: #333;
-  line-height: 1.65;
+.yiji-text {
+  display: block;
+  font-size: 28rpx;
+  color: #555;
+  line-height: 1.7;
 }
 
 .card-tip {
