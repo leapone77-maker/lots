@@ -2,7 +2,14 @@ const fs = require('fs');
 const src = fs.readFileSync('utils/qianData.js', 'utf8');
 const match = src.match(/const QIAN_DB = (\[[\s\S]*?\n\]);/);
 const data = eval('(' + match[1] + ')');
-const q60 = data.filter(q => q.id >= 1 && q.id <= 60);
+const qAll = data;
+
+// 区间参数：node gen_preview.js [start] [end]，不传则全量
+const startArg = process.argv[2] ? parseInt(process.argv[2], 10) : null;
+const endArg = process.argv[3] ? parseInt(process.argv[3], 10) : null;
+const qRange = qAll.filter(q => (startArg == null || q.id >= startArg) && (endArg == null || q.id <= endArg));
+const rangeLabel = (startArg != null && endArg != null) ? `${startArg}-${endArg}` : `1-${qAll.length}`;
+const outFile = (startArg != null && endArg != null) ? `preview_${startArg}_${endArg}.html` : `preview_1_${qAll.length}.html`;
 
 const levelColor = (l) => {
   if (l === '上上签') return '#A8201A';
@@ -16,7 +23,7 @@ let html = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>签诗预览 (1-60)</title>
+<title>签诗预览 (${rangeLabel})</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #F5F0E6; font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; }
@@ -33,10 +40,10 @@ h1 { text-align: center; color: #A8201A; margin-bottom: 30px; font-size: 28px; }
 </style>
 </head>
 <body>
-<h1>阿鹏趣签 · 签诗预览 (1-60)</h1>
+<h1>阿鹏趣签 · 签诗预览 (${rangeLabel})</h1>
 `;
 
-q60.forEach(q => {
+qRange.forEach(q => {
   const c = levelColor(q.level);
   html += `<div class="card">
   <div class="header">
@@ -57,5 +64,5 @@ ${q.yiji ? `<div class="divider"></div>
 });
 
 html += '</body>\n</html>';
-fs.writeFileSync('preview_1_60.html', html, 'utf8');
-console.log('Done: preview_1_60.html (' + q60.length + ' cards)');
+fs.writeFileSync(outFile, html, 'utf8');
+console.log('Done: ' + outFile + ' (' + qRange.length + ' cards)');
