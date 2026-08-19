@@ -1,4 +1,4 @@
-const QIAN_DB = require('../../utils/qianData.js')
+const { QIAN_DB } = require('../../utils/qianData.js')
 
 Page({
   data: {
