@@ -269,9 +269,10 @@ Page({
       date: dateStr,
       id: record.id,
       level: record.level || fullQian.level || '未知',
-      poemText: poemArr.join('，'),
+      poemText: poemArr.join('\n'),
       poemRaw: poemArr,
       basic: record.basic || fullQian.basic || null,
+      yiji: record.yiji || fullQian.yiji || '',
       keywords: fullQian.keywords || []
     });
     wx.navigateTo({

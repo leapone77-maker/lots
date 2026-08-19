@@ -1,4 +1,4 @@
-const QIAN_DB = require('../../utils/qianData.js');
+const { QIAN_DB } = require('../../utils/qianData.js');
 const { getBeijingDateStr } = require('../../utils/dateUtil.js');
 const config = require('../../utils/config.js');
 
@@ -271,9 +271,10 @@ Page({
         date: todayStr,
         id: qian.id,
         level: qian.level,
-        poemText: Array.isArray(qian.poem) ? qian.poem.join('，') : qian.poem,
+        poemText: Array.isArray(qian.poem) ? qian.poem.join('\n') : qian.poem,
         poemRaw: qian.poem,
         basic: qian.basic,
+        yiji: qian.yiji || '',
         keywords: qian.keywords || []
       });
 
@@ -285,9 +286,10 @@ Page({
         id: qian.id,
         level: qian.level,
         poemTitle: qian.poem[0] || '',
-        poemText: Array.isArray(qian.poem) ? qian.poem.join('，') : qian.poem,
+        poemText: Array.isArray(qian.poem) ? qian.poem.join('\n') : qian.poem,
         poemRaw: qian.poem,
-        basic: qian.basic
+        basic: qian.basic,
+        yiji: qian.yiji || ''
       });
       wx.setStorageSync('drawHistory', history.slice(0, 100));
 
