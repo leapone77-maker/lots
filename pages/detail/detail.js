@@ -18,7 +18,8 @@ Page({
     remainCount: null,     // 当日剩余咨询次数（null=不适用/未登录/本地模式）
     dailyLimit: 1,         // 当日基础上限（1=基础；分享成功后临时为2），用于判断是否显示分享引导
     centerToast: { show: false, text: '' },  // 屏幕中间 toast（内联实现）
-    inputExpanded: false   // 输入框是否展开为大文本域
+    inputExpanded: false,  // 输入框是否展开为大文本域
+    userProfile: ''        // 用户画像文本（从云端获取，不展示给用户）
   },
 
   onLoad(options) {
@@ -143,7 +144,7 @@ Page({
     if (userInfo) {
       // 已登录（有账号 token）：使用云端记忆同步
       this.setData({ isLoggedIn: true, userInfo });
-      this.loadMemories();
+      this.loadProfile();
       this.fetchQuota();
     } else if (this.data.localMode) {
       // 纯本地模式：无需登录，视为已登录（仅本地记忆），不弹登录框、不强制登录
@@ -154,17 +155,17 @@ Page({
     }
   },
 
-  loadMemories() {
+  loadProfile() {
     const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
     const token = userInfo.token || '';
     wx.cloud.callFunction({
       name: 'jieqian',
       data: { action: 'getMemories', token: token }
     }).then(res => {
-      const memories = res.result?.memories || [];
-      wx.setStorageSync('userMemories', memories);
-      console.log('[loadMemories] 拉取到', memories.length, '条记忆');
-    }).catch((err) => { console.error('[loadMemories] 失败', err); });
+      const profile = res.result?.profile || '';
+      this.setData({ userProfile: profile });
+      console.log('[loadProfile] 加载用户画像:', profile.substring(0, 100) + (profile.length > 100 ? '...' : ''));
+    }).catch((err) => { console.error('[loadProfile] 失败', err); });
   },
 
   // 拉取当日剩余咨询次数（仅登录账号 + 云端模式有效）
@@ -193,7 +194,7 @@ Page({
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
     this._refreshShare();   // 登录成功后预生成分享快照，保证首次分享即有效
-    this.loadMemories();
+    this.loadProfile();
     this.fetchQuota();
     wx.showToast({ title: '登录成功', icon: 'success' });
 
@@ -362,7 +363,7 @@ Page({
 
   /* ========== 深度解读 ========== */
   callInterp(userQuestion) {
-    const memories = this.getInterpMemory();
+    const profile = this.getUserProfile();
     const qianInfo = this.data.hasDrawn ? {
       id: this.data.drawnId,
       level: this.data.drawnLevel,
@@ -387,7 +388,7 @@ Page({
         token: this.data.userInfo ? this.data.userInfo.token : '',
         messages: recentMsgs,
         question: finalQuestion,
-        memories: memories,
+        profile: profile,
         currentQian: qianInfo
       }
     }).then(res => {
@@ -618,63 +619,14 @@ Page({
   },
 
   /* ========== 记忆系统 ========== */
+  getUserProfile() {
+    // 返回用户画像文本（从 data 中获取）
+    return this.data.userProfile || '';
+  },
+
   extractMemory(text) {
-    if (!text || typeof text !== 'string') return;
-
-    const now = new Date();
-    const year = now.getFullYear();          // 当前年份，如 2026
-    const yearStr = year.toString();
-
-    // 带上下文提取规则：每个条目 [正则, 分类, 标签生成函数]
-    const rules = [
-      // 本命年（捕获年份前缀：今年/202x年/本命年）
-      { re: /(\d{4})?年?本命年/, cat: 'life', fmt: (m) => ((m[1] || yearStr) + '年本命年') },
-      { re: /今年本命年/, cat: 'life', fmt: () => (yearStr + '年本命年') },
-      // 感情
-      { re: /(刚|最近|正在)?(失恋|分手|离婚)/, cat: 'love', fmt: (m) => (m[0]) },
-      { re: /(想|准备|计划)?(结婚|领证|订婚)/, cat: 'love', fmt: (m) => (m[0]) },
-      { re: /单身/, cat: 'love', fmt: () => ('单身') },
-      { re: /(在谈|有|找|想找|相亲)?(对象|男友|女友|伴侣|另一半)/, cat: 'love', fmt: (m) => (m.filter(Boolean).join('')) },
-      // 事业
-      { re: /(想|准备|打算|正在)?(升职|跳槽|辞职|创业|转正|面试|入职)/, cat: 'career', fmt: (m) => (m.filter(Boolean).join('')) },
-      { re: /(被|遭)?(裁员|降薪|失业|欠薪)/, cat: 'career', fmt: (m) => (m[0]) },
-      { re: /考研|考公|考编|出国|留学|毕业|乔迁|搬家/, cat: 'life', fmt: (m) => (m[0]) },
-      // 财富
-      { re: /(想|准备|打算)?(投资|理财|买房|买车|买基金|买股票)/, cat: 'wealth', fmt: (m) => (m.filter(Boolean).join('')) },
-      { re: /(有|背)?(贷款|欠债|债务)/, cat: 'wealth', fmt: (m) => (m.filter(Boolean).join('')) },
-      // 健康
-      { re: /(长期|经常|严重)?(失眠|焦虑|抑郁|脱发)/, cat: 'health', fmt: (m) => (m.filter(Boolean).join('')) },
-      { re: /(做过|要做|准备做)?(手术|体检)/, cat: 'health', fmt: (m) => (m.filter(Boolean).join('')) },
-    ];
-
-    const extracted = [];
-    rules.forEach(rule => {
-      const match = text.match(rule.re);
-      if (match) {
-        const tag = rule.fmt(match);
-        if (tag) extracted.push({ tag, cat: rule.cat, time: now.toISOString() });
-      }
-    });
-
-    console.log('[extractMemory] 输入:', text.slice(0, 40), '→ 提取到:', extracted.length > 0 ? extracted.map(e => e.tag).join(', ') : '(无)');
-    console.log('[extractMemory] localMode=', this.data.localMode, 'isLoggedIn=', this.data.isLoggedIn, 'hasToken=', !!((this.data.userInfo || wx.getStorageSync('userInfo') || {}).token));
-
-    if (extracted.length > 0) {
-      // 记忆标签永远写入本地（关闭登录时仅本地，无需跨设备同步）
-      const localMemories = wx.getStorageSync('localMemories') || [];
-      localMemories.push(...extracted.map(e => `${e.time.slice(0,10)} ${e.tag}`));
-      wx.setStorageSync('localMemories', localMemories.slice(-30));
-
-      // 只要用户已登录（有token），就同步到云端实现跨设备/多端一致
-      // 注意：localMode=false 才需要登录（有token），localMode=true 免登录仅本地
-      const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
-      if (userInfo.token) {
-        console.log('[saveMemory] 准备保存到云端:', extracted.map(e => e.tag).join(', '));
-        this._saveMemory(extracted);
-      } else {
-        console.log('[saveMemory] 用户未登录，跳过云端保存（仅本地）');
-      }
-    }
+    // 旧版关键词提取已废弃，画像由 AI 在 chat 时自动提取并保存
+    return;
   },
 
   getInterpMemory() {
@@ -690,114 +642,8 @@ Page({
   },
 
   _saveMemory(extracted) {
-    // extracted: [{ tag, cat }, ...]  来自 extractMemory 的提取结果
-    const userInfo = this.data.userInfo || wx.getStorageSync('userInfo') || {};
-    const token = userInfo.token || '';
-    if (!token) {
-      console.warn('[saveMemory] 无token，跳过云端保存（仅本地）');
-      return;
-    }
-    if (!extracted || extracted.length === 0) return;
-    // 批量传给服务端，由服务端逐条写入（单次网络请求）
-    wx.cloud.callFunction({
-      name: 'jieqian',
-      data: {
-        action: 'saveMemory',
-        token: token,
-        items: extracted.map(e => ({ tag: e.tag, cat: e.cat }))
-      }
-    }).then(res => {
-      console.log('[saveMemory] 已保存', extracted.length, '条:', extracted.map(e => e.tag).join(', '));
-    }).catch(err => {
-      console.error('[saveMemory] 保存失败:', err);
-    });
-  },
-
-  /* ========== 工具方法 ========== */
-  _escHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  },
-
-  /* 去除 HTML 标签，提取纯文本（发送解读时用） */
-  _stripHtml(html) {
-    if (!html) return '';
-    return String(html)
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/?(div|span|p|section|article|strong|em|b|i|u|h[1-6]|ul|ol|li|blockquote|pre|code)\b[^>]*>/gi, '')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  },
-
-  /* ========== 分享 ========== */
-
-  // 预生成/刷新分享快照（仅已登录可用；本地模式或未登录不分享）
-  _refreshShare(callback) {
-    if (!this.data.hasDrawn) return
-    if (this.data.localMode) return            // 本地模式不分享
-    const token = this.data.userInfo && this.data.userInfo.token
-    if (!token) return                          // 仅已登录账号可分享（已去掉匿名分享）
-    const q = this.data.qian || {}
-    if (!q.id) return
-
-    const snapshot = {
-      signId: q.id,
-      level: q.level,
-      poemText: q.poemText,
-      basic: q.basic || null,
-      yiji: q.yiji || null,
-      nickname: (this.data.userInfo && this.data.userInfo.nickname) || '',
-      chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
-    }
-
-    const data = { action: 'createShare', snapshot: snapshot, token: token }
-
-    wx.cloud.callFunction({ name: 'jieqian', data: data }).then(res => {
-      if (res.result && res.result.code === 0 && res.result.shareId) {
-        this.setData({ _shareId: res.result.shareId })
-        if (callback) callback()
-      }
-    }).catch(() => { if (callback) callback() })
-  },
-
-  // 分享按钮点击：已登录→刷新快照并触发微信原生分享面板；未登录→弹登录框
-  onShareTap() {
-    if (!this.data.hasDrawn) return
-    if (this.data.localMode) return            // 本地模式不分享（按钮本就不显示）
-    if (!this.data.isLoggedIn) {               // 未登录 → 弹登录框，登录后才能分享
-      this.setData({ showLogin: true })
-      return
-    }
-    this._refreshShare()                        // 已登录 → 刷新快照，原生分享面板由 open-type="share" 触发
-  },
-
-  // 微信原生分享菜单回调（右上角 "..." → 转发给朋友）
-  onShareAppMessage() {
-    const shareId = this.data._shareId || ''
-    const title = `阿鹏趣签·第${this.data.drawnId || ''}签`
-    this.grantShareBonus()  // 进入转发流程即触发分享奖励（尽力而为，不阻塞面板）
-    if (shareId) {
-      return {
-        title: title,
-        path: '/pages/share/share?shareId=' + shareId,
-        imageUrl: '/images/jieqian-share-fu.png'
-      }
-    }
-    // 兜底：快照尚未生成，仍保持规范标题，路径回首页
-    return {
-      title: title,
-      path: '/pages/index/index',
-      imageUrl: '/images/jieqian-share-fu.png'
-    }
+    // 旧版保存已废弃，画像由 AI 在 chat 时自动保存到云端
+    return;
   },
 
   // 分享奖励发放：进入转发流程时调用（用户发起转发那一刻触发 onShareAppMessage）。

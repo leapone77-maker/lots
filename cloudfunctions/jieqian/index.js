@@ -12,8 +12,10 @@
  * 数据库集合（需在云开发控制台手动创建）：
  *   - users    : { _id, account, password, token, nickname, created, dailyLimit, dialogCount, dialogDate }
  *        dailyLimit=每日可咨询次数上限(默认1；用完基础次数后分享成功会临时升为2，跨天重置回1); dialogCount=当日已用次数; dialogDate=计数对应日期(北京时间)，跨天重置
- *   - memories: { _id, uid, account, tag, created }
- *        uid=关联 users._id；account=冗余存一份便于人工排查(非查询键)；tag=合并标签(分类+文本, 如"[life]2026年本命年")；created=北京时间字符串(如"2026-07-31 10:19:27")
+ *   - memories: { _id, uid, profile, updatedAt }
+ *        uid=关联 users._id（唯一索引，每用户一条）
+ *        profile = { permanent: "长期事实文本", recent: [{text, date}] }
+ *        updatedAt = 最后更新时间戳(Date.now())
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
  *        { testMode: bool, localMode: bool }
  *        testMode=true 测试态(抽签无限次 + AI咨询无限次); false=正式(抽签每天1次, AI每天1次)
@@ -155,29 +157,38 @@ function verifyIdentity(prompt) {
 }
 
 /**
- * 构建 System Prompt —— 基础提示词(PROMPT.md) + 动态签文/记忆
+ * 构建 System Prompt —— 基础提示词(PROMPT.md) + 动态签文/画像
  */
-function buildSystemPrompt(qian, memList, question) {
+function buildSystemPrompt(qian, profileText, question) {
   let p = BASE_PROMPT
 
   // 签文信息（动态注入）
   if (qian) {
-    p += '\n\n【当前签文】'
-    p += '\n签号：' + (qian.id || '?') + '　等级：' + (qian.level || '?')
+    p += '
+
+【当前签文】'
+    p += '
+签号：' + (qian.id || '?') + ' 等级：' + (qian.level || '?')
     const poemText = Array.isArray(qian.poem) ? qian.poem.join('，') : (qian.poem || '')
-    p += '\n签诗：' + poemText
+    p += '
+签诗：' + poemText
     if (qian.basic) {
-      p += '\n\n基础解签：' + qian.basic
+      p += '
+
+基础解签：' + qian.basic
     }
   }
 
-  // 用户记忆（核心卖点，动态注入）
-  if (memList && memList.length > 0) {
-    p += '\n\n【求签人的个人背景（长期记忆）】'
-    p += '\n以下是该用户过往透露的重要人生事件/状态，这是你的"独家信息"。解读时必须自然地引用这些信息来拉近距离——就像老朋友一样记得对方说过的话。'
-    p += '\n引用方式示例："刚好应了你本命年的转机""之前情感里的失意都是在为对的人清场""结合你最近提到的升职压力"...'
-    p += '\n切忌不要生硬罗列记忆列表，而是将相关记忆有机织入解读正文的开头或对应段落。'
-    memList.forEach(function(m) { p += '\n- ' + String(m) })
+  // 用户画像（动态注入，替代旧的 memories 标签列表）
+  if (profileText && profileText.length > 0) {
+    p += '
+
+【求签人的个人背景】'
+    p += '
+' + profileText
+    p += '
+
+（以上是系统从该用户过往对话中自动提取的画像信息，解读时自然引用以拉近距离，像老朋友一样记得对方说过的话。切忌生硬罗列。）'
   }
 
   // 身份校验：每次发送前校对，不能偏离
@@ -185,7 +196,6 @@ function buildSystemPrompt(qian, memList, question) {
 
   return p
 }
-
 /**
  * 调用远程解读服务
  */
@@ -324,71 +334,113 @@ exports.main = async function(event, context) {
       }
     }
 
-    // ---- 保存记忆（批量）----
-    // items: [{ tag: '2026年本命年', cat: 'life' }, ...]
-    // cat 与 tag 合并为单一字段 tag = "[life]2026年本命年" 存储（不再单独存 cat）
-    // 每条提取结果独立存一条记录；相同 tag 不重复写入（滤重）
-    if (action === 'saveMemory') {
-      var items = event.items
-      if (!items || !Array.isArray(items) || items.length === 0) return { code: 1, msg: '记忆内容为空' }
-      console.log('[saveMemory] 收到保存请求 items=' + JSON.stringify(items).slice(0, 120) + ' token=' + (event.token || '').slice(0, 8))
-      var u = null
+    // ---- 保存/更新用户画像 ----
+    // profile: [{ text: '2026年本命年', type: 'permanent' }, ...]
+    // 合并到已有画像：permanent 追加去重，recent 追加并清理过期
+    if (action === 'saveProfile') {
+      var profileItems = event.profile
+      if (!profileItems || !Array.isArray(profileItems) || profileItems.length === 0) {
+        return { code: 0, saved: 0 }
+      }
       var token = event.token
-      if (token) u = await authByToken(token)
-      console.log('[saveMemory] 查询用户结果 uid=' + (u ? u._id : 'null') + ' account=' + (u ? u.account : 'anonymous'))
+      var u = token ? await authByToken(token) : null
+      if (!u) return { code: 401, msg: '请先登录' }
+      var uid = u._id
+      console.log('[saveProfile] uid=' + uid + ' items=' + JSON.stringify(profileItems).slice(0, 200))
 
-      // 格式化北京时间（UTC+8）：2026-07-31 10:19:27
-      // 云函数服务器运行在 UTC 时区，必须手动 +8h 偏移
-      function fmtBeijingDate() {
+      // 北京时间今日日期 YYYY-MM-DD
+      function todayStr() {
         var d = new Date(Date.now() + 8 * 60 * 60 * 1000)
-        var pad = function(n) { return n < 10 ? '0' + n : '' + n }
-        return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
-          ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds())
+        return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0')
+      }
+      var today = todayStr()
+
+      // 读取已有画像
+      var existing = null
+      var existRes = await memories.where({ uid: uid }).get()
+      if (existRes.data && existRes.data.length > 0) {
+        existing = existRes.data[0]
       }
 
-      var saved = 0
-      for (var i = 0; i < items.length; i++) {
-        var it = items[i]
-        var rawTag = (it.tag || '').trim()
-        if (!rawTag) continue
-        // cat + tag 合并为单一存储值，如 "[life]2026年本命年"
-        var combinedTag = '[' + (it.cat || '其他').trim() + ']' + rawTag
-        // 滤重：同一用户+同一tag 不重复存（避免多次聊天重复记录"本命年"等）
-        var dup = await memories.where({ uid: u ? u._id : '', tag: combinedTag }).count()
-        if (dup.total > 0) { console.log('[saveMemory] 跳过重复 tag=' + combinedTag); continue }
-        await memories.add({
-          data: {
-            uid: u ? u._id : '',
-            account: u ? u.account : '',
-            tag: combinedTag,
-            created: fmtBeijingDate()
+      // 合并逻辑
+      var permText = (existing && existing.profile && existing.profile.permanent) || ''
+      var recentArr = (existing && existing.profile && Array.isArray(existing.profile.recent)) ? existing.profile.recent : []
+
+      // 先清理过期 recent（>=30天删除）
+      var now = Date.now()
+      recentArr = recentArr.filter(function(item) {
+        var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
+        return (now - itemDate) < 30 * 24 * 60 * 60 * 1000
+      })
+
+      profileItems.forEach(function(item) {
+        if (!item.text) return
+        if (item.type === 'permanent') {
+          // 追加去重
+          if (permText.indexOf(item.text) === -1) {
+            permText = permText ? permText + '，' + item.text : item.text
           }
+        } else {
+          // recent：追加（同text不重复）
+          var exists = recentArr.some(function(r) { return r.text === item.text })
+          if (!exists) {
+            recentArr.push({ text: item.text, date: today })
+          }
+        }
+      })
+
+      var newProfile = { permanent: permText, recent: recentArr }
+
+      if (existing) {
+        await memories.doc(existing._id).update({
+          data: { profile: newProfile, updatedAt: now }
         })
-        saved++
+      } else {
+        await memories.add({
+          data: { uid: uid, profile: newProfile, updatedAt: now }
+        })
       }
-      console.log('[saveMemory] 新增 ' + saved + ' 条记忆')
-      return { code: 0, saved: saved }
+
+      console.log('[saveProfile] 画像已更新 permanent=' + permText.slice(0, 60) + ' recent=' + recentArr.length)
+      return { code: 0, saved: profileItems.length }
     }
 
-    // ---- 读取记忆 ----
+    // ---- 读取用户画像（拼接为描述文本，含时间衰减）----
     if (action === 'getMemories') {
       var token = event.token
       var u = await authByToken(token)
-      if (!u) return { code: 401, memories: [] }
-      var res = await memories
-        .where({ uid: u._id })
-        .orderBy('created', 'desc')
-        .limit(50)
-        .get()
-      // 返回格式：memories 数组（每项取 tag 字段）
-      var list = (res.data || []).map(function(m) { return m.tag || '' }).filter(Boolean)
-      return { code: 0, memories: list }
+      if (!u) return { code: 401, memories: [], profile: '' }
+      var res = await memories.where({ uid: u._id }).get()
+      if (!res.data || res.data.length === 0) {
+        return { code: 0, memories: [], profile: '' }
+      }
+      var doc = res.data[0]
+      var profile = doc.profile || {}
+      var permText = profile.permanent || ''
+      var recentArr = Array.isArray(profile.recent) ? profile.recent : []
+
+      // 拼接画像文本：recent >=15天标"此前"，>=30天删除
+      var now = Date.now()
+      var recentTexts = []
+      recentArr.forEach(function(item) {
+        var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
+        var daysDiff = Math.floor((now - itemDate) / (24 * 60 * 60 * 1000))
+        if (daysDiff >= 30) return  // 超过30天，不加入
+        if (daysDiff >= 15) {
+          recentTexts.push('此前' + item.text)  // 降权，标"此前"
+        } else {
+          recentTexts.push(item.text)
+        }
+      })
+
+      var fullProfile = [permText].concat(recentTexts).filter(Boolean).join('；')
+      return { code: 0, memories: [], profile: fullProfile }
     }
 
     // ---- 深度解读对话 ----
     if (action === 'chat') {
       var qian = event.currentQian || null       // 当前签文对象
-      var memList = Array.isArray(event.memories) ? event.memories : (event.memories ? [event.memories] : [])
+      var profileText = event.profile || ''  // 前端传入的画像文本（从 getMemories 获取）
       var question = event.question || event.message || ''
       var history = event.messages || []         // 聊天历史
 
@@ -423,7 +475,7 @@ exports.main = async function(event, context) {
       }
 
       // 构建带记忆的 system prompt
-      var systemPrompt = buildSystemPrompt(qian, memList, question)
+      var systemPrompt = buildSystemPrompt(qian, profileText, question)
 
       // 调用远程解读服务
       var reply = await callInterp(systemPrompt, question, history)
@@ -435,12 +487,90 @@ exports.main = async function(event, context) {
         await users.doc(quota2.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota2.today } })
         remain = quota2.limit - newUsed
         console.log('[chat] 配额累加完成 account=' + caller.account + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
-        return { code: 0, content: reply, remain: remain, dailyLimit: quota2.limit }
+      }
+
+      // ---- 解析 AI 返回的 JSON，提取画像 ----
+      var answerText = reply
+      var profileItems = []
+      try {
+        var cleaned = reply.trim()
+        if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7)
+        else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3)
+        if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3)
+        cleaned = cleaned.trim()
+        
+        var parsed = JSON.parse(cleaned)
+        if (parsed && typeof parsed.answer === 'string' && parsed.answer.length > 0) {
+          answerText = parsed.answer
+          if (Array.isArray(parsed.profile)) {
+            profileItems = parsed.profile.filter(function(item) {
+              return item && item.text && (item.type === 'permanent' || item.type === 'recent')
+            })
+          }
+        }
+      } catch(e) {
+        console.log('[chat] JSON解析失败，使用原始文本:', e.message)
+      }
+
+      // ---- 异步保存画像（不阻塞返回）----
+      if (profileItems.length > 0 && caller && caller._id) {
+        console.log('[chat] 提取到画像', profileItems.length, '条')
+        ;(async function() {
+          try {
+            var existing = null
+            var existRes = await memories.where({ uid: caller._id }).get()
+            if (existRes.data && existRes.data.length > 0) existing = existRes.data[0]
+            
+            function todayStr() {
+              var d = new Date(Date.now() + 8 * 60 * 60 * 1000)
+              return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0')
+            }
+            var today = todayStr()
+            var now2 = Date.now()
+            
+            var permText = (existing && existing.profile && existing.profile.permanent) || ''
+            var recentArr = (existing && existing.profile && Array.isArray(existing.profile.recent)) ? existing.profile.recent : []
+            
+            // 清理过期 recent（>=30天删除）
+            recentArr = recentArr.filter(function(item) {
+              var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
+              return (now2 - itemDate) < 30 * 24 * 60 * 60 * 1000
+            })
+            
+            profileItems.forEach(function(item) {
+              if (item.type === 'permanent') {
+                if (permText.indexOf(item.text) === -1) {
+                  permText = permText ? permText + '，' + item.text : item.text
+                }
+              } else {
+                var exists = recentArr.some(function(r) { return r.text === item.text })
+                if (!exists) recentArr.push({ text: item.text, date: today })
+              }
+            })
+            
+            var newProfile = { permanent: permText, recent: recentArr }
+            if (existing) {
+              await memories.doc(existing._id).update({ data: { profile: newProfile, updatedAt: now2 } })
+            } else {
+              await memories.add({ data: { uid: caller._id, profile: newProfile, updatedAt: now2 } })
+            }
+            console.log('[chat] 画像已保存')
+          } catch(saveErr) {
+            console.error('[chat] 画像保存失败:', saveErr.message)
+          }
+        })()
+      }
+
+      // 返回给前端的是解签正文（不含 profile）
+      if (!testMode) {
+        return { code: 0, content: answerText, remain: remain, dailyLimit: quota2.limit }
       } else {
         console.log('[chat] 测试态，跳过配额统计')
-        return { code: 0, content: reply, remain: null, dailyLimit: null }
+        return { code: 0, content: answerText, remain: null, dailyLimit: null }
       }
     }
+
+
 
     // ---- 查询当日剩余咨询次数（前端进入页面时展示）----
     if (action === 'getQuota') {
