@@ -19,7 +19,8 @@ Page({
     dailyLimit: 1,         // 当日基础上限（1=基础；分享成功后临时为2），用于判断是否显示分享引导
     centerToast: { show: false, text: '' },  // 屏幕中间 toast（内联实现）
     inputExpanded: false,  // 输入框是否展开为大文本域
-    userProfile: ''        // 用户画像文本（从云端获取，不展示给用户）
+    userProfile: '',       // 用户画像文本（从云端获取，不展示给用户）
+    _shareId: ''           // 分享快照 ID（云函数返回）
   },
 
   onLoad(options) {
@@ -662,6 +663,68 @@ Page({
         }
       }
     }).catch(() => {})
+  },
+
+  /* ========== 分享 ========== */
+
+  // 预生成/刷新分享快照（仅已登录可用；本地模式或未登录不分享）
+  _refreshShare(callback) {
+    if (!this.data.hasDrawn) return
+    if (this.data.localMode) return            // 本地模式不分享
+    const token = this.data.userInfo && this.data.userInfo.token
+    if (!token) return                          // 仅已登录账号可分享（已去掉匿名分享）
+    const q = this.data.qian || {}
+    if (!q.id) return
+
+    const snapshot = {
+      signId: q.id,
+      level: q.level,
+      poemText: q.poemText,
+      basic: q.basic || null,
+      yiji: q.yiji || null,
+      nickname: (this.data.userInfo && this.data.userInfo.nickname) || '',
+      chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
+    }
+
+    const data = { action: 'createShare', snapshot: snapshot, token: token }
+
+    wx.cloud.callFunction({ name: 'jieqian', data: data }).then(res => {
+      if (res.result && res.result.code === 0 && res.result.shareId) {
+        this.setData({ _shareId: res.result.shareId })
+        if (callback) callback()
+      }
+    }).catch(() => { if (callback) callback() })
+  },
+
+  // 分享按钮点击：已登录→刷新快照并触发微信原生分享面板；未登录→弹登录框
+  onShareTap() {
+    if (!this.data.hasDrawn) return
+    if (this.data.localMode) return            // 本地模式不分享（按钮本就不显示）
+    if (!this.data.isLoggedIn) {               // 未登录 → 弹登录框，登录后才能分享
+      this.setData({ showLogin: true })
+      return
+    }
+    this._refreshShare()                        // 已登录 → 刷新快照，原生分享面板由 open-type="share" 触发
+  },
+
+  // 微信原生分享菜单回调（右上角 "..." → 转发给朋友）
+  onShareAppMessage() {
+    const shareId = this.data._shareId || ''
+    const title = `阿鹏趣签·第${this.data.drawnId || ''}签`
+    this.grantShareBonus()  // 进入转发流程即触发分享奖励（尽力而为，不阻塞面板）
+    if (shareId) {
+      return {
+        title: title,
+        path: '/pages/share/share?shareId=' + shareId,
+        imageUrl: '/images/jieqian-share-fu.png'
+      }
+    }
+    // 兜底：快照尚未生成，仍保持规范标题，路径回首页
+    return {
+      title: title,
+      path: '/pages/index/index',
+      imageUrl: '/images/jieqian-share-fu.png'
+    }
   },
 
   // 屏幕中间弹出提示，2 秒后自动上滑消失（内联实现，替代原 center-toast 组件）

@@ -138,6 +138,10 @@ Page({
     return s
   },
 
+  goHome() {
+    wx.reLaunch({ url: '/pages/index/index' })
+  },
+
   onShareAppMessage() {
     const share = this.data.share
     const title = share ? `阿鹏趣签·第${share.signId}签` : '阿鹏趣签'
