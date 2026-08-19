@@ -1,6 +1,6 @@
 const fs = require('fs');
 const src = fs.readFileSync('utils/qianData.js', 'utf8');
-const match = src.match(/const QIAN_DB = (\[[\s\S]*?\n\]);/);
+const match = src.match(/const QIAN_DB = (\[[\s\S]*?\n?\s*\]);/);
 const data = eval('(' + match[1] + ')');
 const qAll = data;
 
