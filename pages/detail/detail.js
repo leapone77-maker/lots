@@ -61,8 +61,8 @@ Page({
     this.checkLogin();
     this.loadLocalChat();
     this._loadSerifFont();
-    // 已登录的云模式用户进入详情页即预生成分享快照
-    if (!this.data.localMode && this.data.isLoggedIn) this._refreshShare();
+    // 已登录的云模式用户进入详情页仅预计算 shareId（不写 shares 库）
+    if (!this.data.localMode && this.data.isLoggedIn) this._precomputeShareId();
 
     // 从历史页进入 → 尝试加载当天云端聊天记录
     if (historyDate && this.data.isLoggedIn) {
@@ -74,7 +74,7 @@ Page({
       this.appConfig = cfg;
       this.setData({ localMode: cfg.localMode !== false });  // 热更新本地模式开关
       this.checkLogin();
-      if (!this.data.localMode && this.data.isLoggedIn) this._refreshShare();  // 热更新后云模式+已登录则补生成快照
+      if (!this.data.localMode && this.data.isLoggedIn) this._precomputeShareId();  // 热更新后仅预计算 shareId，不写库
       // 热更新后如果刚登录且有历史日期，补拉聊天
       if (historyDate && this.data.isLoggedIn && this.data.chatMessages.length === 0) {
         this._loadCloudChat(historyDate);
@@ -138,6 +138,31 @@ Page({
     wx.setStorageSync(key, list);
   },
 
+  /* ========== 工具方法 ========== */
+  _escHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  },
+
+  /* 去除 HTML 标签，提取纯文本（发送解读时用） */
+  _stripHtml(html) {
+    if (!html) return '';
+    return String(html)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?(div|span|p|section|article|strong|em|b|i|u|h[1-6]|ul|ol|li|blockquote|pre|code)\b[^>]*>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  },
+
   /* ========== 登录相关（登录门槛由 localMode 派生：localMode=true 不登录，false 需登录）========== */
   checkLogin() {
     const cfg = this.appConfig || config.getCachedConfig();
@@ -194,7 +219,7 @@ Page({
     const userInfo = { account, token, nickname: nickname || '' };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
-    this._refreshShare();   // 登录成功后预生成分享快照，保证首次分享即有效
+    this._precomputeShareId();   // 登录后仅预计算 shareId，保证首次分享即有效（不写库）
     this.loadProfile();
     this.fetchQuota();
     wx.showToast({ title: '登录成功', icon: 'success' });
@@ -667,7 +692,27 @@ Page({
 
   /* ========== 分享 ========== */
 
-  // 预生成/刷新分享快照（仅已登录可用；本地模式或未登录不分享）
+  // 预计算 shareId（只读，不写 shares 库）：进入详情页/登录成功时调用，
+  // 让右上角"..."转发也能带上有效路径；真正写库只发生在点击分享按钮时
+  _precomputeShareId() {
+    if (this.data._shareId) return              // 已算过，不重复请求
+    if (!this.data.hasDrawn) return
+    if (this.data.localMode) return             // 本地模式不分享
+    const token = this.data.userInfo && this.data.userInfo.token
+    if (!token) return
+    const q = this.data.qian || {}
+    if (!q.id) return
+    wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'getShareId', token: token, signId: q.id }
+    }).then(res => {
+      if (res.result && res.result.code === 0 && res.result.shareId) {
+        this.setData({ _shareId: res.result.shareId })
+      }
+    }).catch(() => {})
+  },
+
+  // 点击分享按钮时才真正写库生成/刷新分享快照（仅已登录可用）
   _refreshShare(callback) {
     if (!this.data.hasDrawn) return
     if (this.data.localMode) return            // 本地模式不分享
@@ -711,6 +756,7 @@ Page({
   onShareAppMessage() {
     const shareId = this.data._shareId || ''
     const title = `阿鹏趣签·第${this.data.drawnId || ''}签`
+    this._refreshShare()    // 真正发起转发才写库（异步不阻塞面板；shareId 确定性强幂等）
     this.grantShareBonus()  // 进入转发流程即触发分享奖励（尽力而为，不阻塞面板）
     if (shareId) {
       return {

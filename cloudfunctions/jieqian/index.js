@@ -107,7 +107,8 @@ async function resolveQuota(token) {
 
 /**
  * 读取后台开关配置（testMode / localMode），统一来源避免多处重复实现
- * 首次读取时若文档不存在则写入默认值，集合异常时安全回退默认值
+ * 读取后台开关，文档不存在时返回默认值但**不自动写入**（避免覆盖用户手动设置）
+ * 集合异常时安全回退默认值
  */
 async function readConfig() {
   const DEFAULTS = { testMode: false, localMode: true }
@@ -116,17 +117,15 @@ async function readConfig() {
     let doc = null
     try { doc = (await col.doc('global').get()).data } catch (e) { doc = null }
     if (!doc) {
-      try {
-        await col.add({ data: { _id: 'global', testMode: false, localMode: true, updatedAt: new Date() } })
-      } catch (e) { /* 集合不存在等，忽略，回退默认 */ }
-      return DEFAULTS
+      // 文档不存在 → 只返回默认值，不自动写入（由用户在云开发控制台手动配置）
+      return { ...DEFAULTS }
     }
     return {
       testMode: typeof doc.testMode === 'boolean' ? doc.testMode : DEFAULTS.testMode,
       localMode: typeof doc.localMode === 'boolean' ? doc.localMode : DEFAULTS.localMode
     }
   } catch (e) {
-    return DEFAULTS
+    return { ...DEFAULTS }
   }
 }
 
@@ -164,31 +163,20 @@ function buildSystemPrompt(qian, profileText, question) {
 
   // 签文信息（动态注入）
   if (qian) {
-    p += '
-
-【当前签文】'
-    p += '
-签号：' + (qian.id || '?') + ' 等级：' + (qian.level || '?')
+    p += '\n\n【当前签文】'
+    p += '\n签号：' + (qian.id || '?') + ' 等级：' + (qian.level || '?')
     const poemText = Array.isArray(qian.poem) ? qian.poem.join('，') : (qian.poem || '')
-    p += '
-签诗：' + poemText
+    p += '\n签诗：' + poemText
     if (qian.basic) {
-      p += '
-
-基础解签：' + qian.basic
+      p += '\n\n基础解签：' + qian.basic
     }
   }
 
   // 用户画像（动态注入，替代旧的 memories 标签列表）
   if (profileText && profileText.length > 0) {
-    p += '
-
-【求签人的个人背景】'
-    p += '
-' + profileText
-    p += '
-
-（以上是系统从该用户过往对话中自动提取的画像信息，解读时自然引用以拉近距离，像老朋友一样记得对方说过的话。切忌生硬罗列。）'
+    p += '\n\n【求签人的个人背景】'
+    p += '\n' + profileText
+    p += '\n\n（以上是系统从该用户过往对话中自动提取的画像信息，解读时自然引用以拉近距离，像老朋友一样记得对方说过的话。切忌生硬罗列。）'
   }
 
   // 身份校验：每次发送前校对，不能偏离
@@ -661,9 +649,19 @@ exports.main = async function(event, context) {
       }
     }
 
+    // ---- 预计算 shareId（只读不写库；仅点击分享按钮时才真正写 shares）----
+    if (action === 'getShareId') {
+      const token = event.token || ''
+      const caller = token ? await authByToken(token) : null
+      if (!caller) return { code: 401, msg: '请先登录后再分享' }
+      const signId = event.signId
+      if (!signId) return { code: 1, msg: '缺少签号' }
+      return { code: 0, shareId: getShareIdByUidSign(caller._id, signId) }
+    }
+
     // ---- 生成只读分享快照（签运诗 + 聊天记录），7天(7*24h)过期 ----
     // 前端把当前展示的数据组装成 snapshot 传过来，云函数只做存储，不暴露用户 token
-    // 传 shareId 则更新该快照（同一会话只维护一个分享文档），否则新建
+    // 同一用户同一签文用确定性 shareId，重复点击分享只更新同一条记录
     // 必须登录：仅已登录账号可创建分享（已移除匿名分享）
     if (action === 'createShare') {
       const token = event.token || ''
