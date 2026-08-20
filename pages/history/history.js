@@ -55,7 +55,8 @@ Page({
         data: { action: 'getHistory', token }
       }).then(res => {
         if (res.result && res.result.code === 0) {
-          this._applyCloud(res.result.draws || {}, res.result.chats || {}, localRecords);
+          // 已登录以数据库为准（draws 为唯一来源），不合并本地缓存
+          this._applyCloud(res.result.draws || {});
         } else {
           this._applyLocal(localRecords);
         }
@@ -84,30 +85,26 @@ Page({
     this._buildCalendar(this.data.year, this.data.month);
   },
 
-  /* ========== 云端记录（已登录）：draws 转记录 + 合并本地 ========== */
-  _applyCloud(draws, chats, localRecords) {
-    this._cloudChats = chats || {};
-    const map = {};
-    // 云端签号（优先，用本地 QIAN_DB 补 level/basic/poem）
+  /* ========== 云端记录（已登录）：以数据库 draws 为唯一来源 ========== */
+  _applyCloud(draws) {
+    // 红点/统计/列表统一只看抽签记录（与"当日记录"列表同口径），聊天不再标记红点
+    this._cloudChats = {};
+    const records = [];
     Object.keys(draws).forEach(date => {
       const sign = draws[date];
       if (!sign) return;
       const q = QIAN_DB.find(x => x.id === sign);
-      map[date] = {
+      records.push({
         date,
         time: '',
         id: sign,
         level: q ? q.level : '未知',
         poemTitle: (q && q.poem && q.poem[0]) ? q.poem[0] : ('第' + sign + '签'),
-        basic: q ? q.basic : null
-      };
+        basic: q ? q.basic : null,
+        yiji: q ? q.yiji : ''
+      });
     });
-    // 本地抽签记录（补齐云端没有的日期，避免换设备前数据丢失）
-    localRecords.forEach(r => {
-      const d = r.date ? r.date.slice(0, 10) : '';
-      if (d && !map[d]) map[d] = r;
-    });
-    const records = Object.keys(map).sort((a, b) => b.localeCompare(a)).map(d => map[d]);
+    records.sort((a, b) => b.date.localeCompare(a.date));
     let shang = 0, zhong = 0, xia = 0;
     records.forEach(r => {
       const lv = (r.level || '').trim();
@@ -130,16 +127,11 @@ Page({
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    // 获取当月有记录的日期集合（抽签 + 聊天都标记）
+    // 获取当月有抽签记录的日期集合（红点与"当日记录"列表、统计同口径，只认抽签）
     const recordDates = new Set();
     this.data.allRecords.forEach(r => {
       if (r.date) recordDates.add(r.date.slice(0, 10));
     });
-    if (this._cloudChats) {
-      Object.keys(this._cloudChats).forEach(d => {
-        if (this._cloudChats[d] && this._cloudChats[d].length) recordDates.add(d);
-      });
-    }
 
     const days = [];
     // 上月填充
@@ -208,14 +200,6 @@ Page({
 
   /* ========== 按日期筛选记录 ========== */
   _filterByDate(dateStr) {
-    if (!dateStr) {
-      const all = this.data.allRecords.map(r => ({
-        ...r,
-        badgeText: '第' + (r.id || '?') + '签'
-      }));
-      this.setData({ filteredRecords: all });
-      return;
-    }
     const filtered = this.data.allRecords
       .filter(r => r.date && r.date.startsWith(dateStr))
       .map(r => ({
@@ -223,14 +207,6 @@ Page({
         badgeText: '第' + (r.id || '?') + '签'
       }));
     this.setData({ filteredRecords: filtered });
-  },
-
-  /* ========== 显示全部记录 ========== */
-  showAllRecords() {
-    this.setData({
-      selectedDate: '',
-      filteredRecords: this.data.allRecords
-    });
   },
 
   /* ========== 清空历史 ========== */

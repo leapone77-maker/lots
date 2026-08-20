@@ -67,11 +67,23 @@ page {
 }
 
 .cal-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 32rpx;
   margin-bottom: 18rpx;
+}
+
+/* 清空：日历卡片右上角 */
+.cal-clear {
+  position: absolute;
+  right: 4rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 25rpx;
+  color: #c0392b;
+  padding: 8rpx 4rpx;
 }
 
 .cal-arrow {
@@ -203,20 +215,6 @@ page {
   padding: 8rpx 22rpx;
   border-radius: 8rpx;
   font-size: 25rpx;
-}
-
-.records-actions {
-  display: flex;
-  gap: 20rpx;
-}
-
-.action-link {
-  font-size: 25rpx;
-  color: #A8201A;
-}
-
-.action-danger {
-  color: #c0392b;
 }
 
 .records-list {

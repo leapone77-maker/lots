@@ -24,11 +24,12 @@
 
   <!-- 日历区域 -->
   <view class="calendar-card">
-    <!-- 月份切换 -->
+    <!-- 月份切换 + 右上角清空 -->
     <view class="cal-header">
       <text class="cal-arrow" bindtap="prevMonth">‹</text>
       <text class="cal-title">{{year}}年{{month}}月</text>
       <text class="cal-arrow" bindtap="nextMonth">›</text>
+      <text class="cal-clear" bindtap="clearRecords">清空</text>
     </view>
 
     <!-- 星期头 -->
@@ -51,13 +52,9 @@
 
   <!-- 当日记录列表 -->
   <view class="records-section">
-    <!-- 标题栏：当日记录 + 显示全部/清空 -->
+    <!-- 标题栏 -->
     <view class="records-header">
       <text class="records-title">当日记录</text>
-      <view class="records-actions">
-        <text class="action-link" bindtap="showAllRecords">显示全部</text>
-        <text class="action-link action-danger" bindtap="clearRecords">清空</text>
-      </view>
     </view>
 
     <!-- 记录列表 -->
