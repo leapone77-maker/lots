@@ -1,4 +1,5 @@
 const { getBeijingDateStr } = require('../../utils/dateUtil.js');
+const guest = require('../../utils/guest.js');
 const config = require('../../utils/config.js');
 const { convertEmoji } = require('../../utils/emoji.js');
 
@@ -219,6 +220,7 @@ Page({
     const userInfo = { account, token, nickname: nickname || '' };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
+    guest.mergeGuestOnLogin(token);   // 把登录前的游客抽签/聊天记录并入账号
     this._precomputeShareId();   // 登录后仅预计算 shareId，保证首次分享即有效（不写库）
     this.loadProfile();
     this.fetchQuota();
@@ -502,10 +504,10 @@ Page({
     })
   },
 
-  /* ========== 云端记录当日聊天（登录 + 非本地模式才写）========== */
+  /* ========== 云端记录当日聊天（非本地模式才写：已登录用 token，未登录用游客ID）========== */
   _recordCloudChat(reply) {
+    if (this.data.localMode) return
     const token = this.data.userInfo ? this.data.userInfo.token : ''
-    if (!token || this.data.localMode) return
     const userText = this._stripHtml(this._pendingUserText || '')
     this._pendingUserText = null
     const aiText = this._stripHtml(typeof reply === 'string' ? reply : '')
@@ -518,7 +520,13 @@ Page({
     if (aiText) msgs.push({ role: 'assistant', content: aiText, t })
     wx.cloud.callFunction({
       name: 'jieqian',
-      data: { action: 'recordChat', token, date: this._chatDate, messages: msgs }
+      data: {
+        action: 'recordChat',
+        token,
+        guestId: token ? '' : guest.getGuestId(),
+        date: this._chatDate,
+        messages: msgs
+      }
     }).catch(() => {})
   },
 

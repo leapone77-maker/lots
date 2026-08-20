@@ -16,6 +16,12 @@
  *        uid=关联 users._id（唯一索引，每用户一条）
  *        profile = { permanent: "长期事实文本", recent: [{text, date}] }
  *        updatedAt = 最后更新时间戳(Date.now())
+ *   - draws   : { _id, uid, account, date, sign, chats:[{role,content,t}], createdAt }
+ *        签文独立表（users 只记账号信息），一人一天一条：
+ *        uid=已登录为 users._id，未登录为设备游客ID(guest_xxx，前端 localStorage 持久)；
+ *        date=抽签日期(YYYY-MM-DD)；sign=签号(0=仅聊天未抽签)；chats=当天聊天记录挂签文下；
+ *        登录后前端调 mergeGuest 一次性把游客记录并入账号，同天冲突保留 createdAt 更早的整条；
+ *        建议建 uid+date 组合索引。users 旧的 draws/chats 内嵌字段已废弃(2026-08-20 全量清空)
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
  *        { testMode: bool, localMode: bool }
  *        testMode=true 测试态(抽签无限次 + AI咨询无限次); false=正式(抽签每天1次, AI每天1次)
@@ -36,6 +42,7 @@ const db = cloud.database()
 const users = db.collection('users')
 const memories = db.collection('memories')
 const shares = db.collection('shares')
+const draws = db.collection('draws')
 
 // 远程解读服务密钥（在云开发控制台以环境变量 INTERP_KEY 配置，不内置明文，不在代码中体现供应商名）
 const INTERP_KEY = process.env.INTERP_KEY || ''
@@ -596,7 +603,8 @@ exports.main = async function(event, context) {
       const _ = db.command
       await users.where({ _id: _.exists(true) }).remove()
       await memories.where({ _id: _.exists(true) }).remove()
-      return { code: 0, msg: 'users 与 memories 已清空' }
+      await draws.where({ _id: _.exists(true) }).remove()
+      return { code: 0, msg: 'users、memories、draws 已清空' }
     }
 
     // ---- 读取后台开关（热更新，无需提交小程序版本）----
@@ -606,47 +614,109 @@ exports.main = async function(event, context) {
       return { code: 0, config: await readConfig() }
     }
 
-    // ---- 写入当日签号到 users.draws[date]，供历史页跨设备展示 ----
-    // draws 结构：{ "2026-07-31": 657, ... }，value=签号(1-888)，无 key 或 0 表示当天没抽
+    // ---- 写入当日签号到 draws 集合（一天一条，upsert），供历史页跨设备展示 ----
+    // 身份：已登录用 token 解析 uid；未登录用前端设备游客ID（guest_xxx），登录后由 mergeGuest 并入账号
     if (action === 'recordDraw') {
       const token = event.token || ''
       const date = event.date || ''          // 形如 "2026-07-31"
       const sign = event.sign                // 签号（数字）
       if (!date || !sign) return { code: 1, msg: '参数缺失' }
-      const caller = await authByToken(token)
-      if (!caller) return { code: 401, msg: '请先登录' }
-      await users.doc(caller._id).update({ data: { ['draws.' + date]: sign } })
-      console.log('[recordDraw] account=' + caller.account + ' date=' + date + ' sign=' + sign)
+      let uid = '', account = ''
+      if (token) {
+        const caller = await authByToken(token)
+        if (caller) { uid = caller._id; account = caller.account || '' }
+      }
+      if (!uid && event.guestId) { uid = event.guestId }
+      if (!uid) return { code: 401, msg: '缺少身份' }
+      const exist = await draws.where({ uid, date }).limit(1).get()
+      if (exist.data && exist.data.length) {
+        await draws.doc(exist.data[0]._id).update({ data: { sign } })
+      } else {
+        await draws.add({
+          data: { uid, account, date, sign, chats: [], createdAt: Date.now() }
+        })
+      }
+      console.log('[recordDraw] uid=' + uid + ' date=' + date + ' sign=' + sign)
       return { code: 0, ok: true }
     }
 
-    // ---- 追加当日聊天记录到 users.chats[date]（数组 push，性能好）----
-    // chats 结构：{ "2026-07-31": [ {role, content, t}, ... ] }
+    // ---- 追加当日聊天记录到 draws 表当天记录的 chats 字段 ----
     if (action === 'recordChat') {
       const token = event.token || ''
       const date = event.date || ''
       const msgs = event.messages || []
       if (!date || !Array.isArray(msgs) || msgs.length === 0) return { code: 1, msg: '参数缺失' }
-      const caller = await authByToken(token)
-      if (!caller) return { code: 401, msg: '请先登录' }
+      let uid = '', account = ''
+      if (token) {
+        const caller = await authByToken(token)
+        if (caller) { uid = caller._id; account = caller.account || '' }
+      }
+      if (!uid && event.guestId) { uid = event.guestId }
+      if (!uid) return { code: 401, msg: '缺少身份' }
       const _ = db.command
-      await users.doc(caller._id).update({
-        data: { ['chats.' + date]: _.push({ each: msgs }) }
-      })
-      console.log('[recordChat] account=' + caller.account + ' date=' + date + ' count=' + msgs.length)
+      const exist = await draws.where({ uid, date }).limit(1).get()
+      if (exist.data && exist.data.length) {
+        await draws.doc(exist.data[0]._id).update({ data: { chats: _.push({ each: msgs }) } })
+      } else {
+        // 当天没抽过签：建一条只有聊天的记录（sign=0 表示仅聊天）
+        await draws.add({
+          data: { uid, account, date, sign: 0, chats: msgs, createdAt: Date.now() }
+        })
+      }
+      console.log('[recordChat] uid=' + uid + ' date=' + date + ' count=' + msgs.length)
       return { code: 0, ok: true }
     }
 
+    // ---- 登录成功后一次性把游客记录并入账号 ----
+    // 同一天两边都有：保留 createdAt 更早的那条（整条保留，不做内容合并），另一条删除
+    if (action === 'mergeGuest') {
+      const token = event.token || ''
+      const guestId = event.guestId || ''
+      const caller = await authByToken(token)
+      if (!caller) return { code: 401, msg: '请先登录' }
+      if (!guestId) return { code: 0, merged: 0 }
+      const gList = await draws.where({ uid: guestId }).limit(400).get()
+      if (!gList.data || !gList.data.length) return { code: 0, merged: 0 }
+      let merged = 0
+      for (const g of gList.data) {
+        const own = await draws.where({ uid: caller._id, date: g.date }).limit(1).get()
+        if (!own.data || !own.data.length) {
+          // 账号该天无记录：游客记录直接改挂到账号
+          await draws.doc(g._id).update({ data: { uid: caller._id, account: caller.account || '' } })
+        } else {
+          // 同天冲突：保留更早的记录
+          const o = own.data[0]
+          const gTime = g.createdAt || 0
+          const oTime = o.createdAt || 0
+          if (gTime && oTime && gTime < oTime) {
+            // 游客的更早 → 账号记录换成游客内容，删游客条
+            await draws.doc(o._id).update({
+              data: { sign: g.sign || o.sign, chats: g.chats || [], createdAt: gTime }
+            })
+          }
+          // 账号的更早（或时间缺失）→ 保留账号，删游客条
+          await draws.doc(g._id).remove()
+        }
+        merged++
+      }
+      console.log('[mergeGuest] account=' + caller.account + ' merged=' + merged)
+      return { code: 0, merged }
+    }
+
     // ---- 读取历史（签号 + 聊天），登录用户跨设备展示 ----
+    // 从 draws 集合聚合，返回结构与旧版一致 { draws:{date:sign}, chats:{date:[...] } }，前端零改动
     if (action === 'getHistory') {
       const token = event.token || ''
       const caller = await authByToken(token)
       if (!caller) return { code: 401, draws: {}, chats: {} }
-      return {
-        code: 0,
-        draws: (caller.draws) || {},
-        chats: (caller.chats) || {}
-      }
+      const list = await draws.where({ uid: caller._id }).limit(400).get()
+      const drawMap = {}
+      const chatMap = {}
+      ;(list.data || []).forEach(r => {
+        if (r.sign) drawMap[r.date] = r.sign
+        if (r.chats && r.chats.length) chatMap[r.date] = r.chats
+      })
+      return { code: 0, draws: drawMap, chats: chatMap }
     }
 
     // ---- 预计算 shareId（只读不写库；仅点击分享按钮时才真正写 shares）----

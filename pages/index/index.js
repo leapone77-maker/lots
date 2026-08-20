@@ -1,6 +1,7 @@
 const { QIAN_DB } = require('../../utils/qianData.js');
 const { getBeijingDateStr } = require('../../utils/dateUtil.js');
 const config = require('../../utils/config.js');
+const guest = require('../../utils/guest.js');
 
 Page({
   data: {
@@ -317,11 +318,18 @@ Page({
         this._saveMemory(`抽到第${qian.id}签 ${qian.level}`);
       }
 
-      // 已登录则把当日签号同步云端（供历史页跨设备展示）
-      if (this.data.isLoggedIn && this.data.userInfo && this.data.userInfo.token) {
+      // 当日签号同步云端（供历史页跨设备展示）：已登录用 token，未登录用设备游客ID；localMode 纯本地不同步
+      if (!this.data.localMode) {
+        const drawToken = (this.data.isLoggedIn && this.data.userInfo) ? this.data.userInfo.token : '';
         wx.cloud.callFunction({
           name: 'jieqian',
-          data: { action: 'recordDraw', token: this.data.userInfo.token, date: todayStr, sign: qian.id }
+          data: {
+            action: 'recordDraw',
+            token: drawToken,
+            guestId: drawToken ? '' : guest.getGuestId(),
+            date: todayStr,
+            sign: qian.id
+          }
         }).catch(() => {});
       }
 
@@ -381,6 +389,7 @@ Page({
     const userInfo = { account, token, nickname: nickname || '' };
     wx.setStorageSync('userInfo', userInfo);
     this.setData({ isLoggedIn: true, userInfo, showLogin: false });
+    guest.mergeGuestOnLogin(token);   // 把登录前的游客抽签/聊天记录并入账号
     wx.showToast({ title: '登录成功', icon: 'success' });
 
     // 登录前触发的待执行动作（如点"历史"弹框）
