@@ -15,7 +15,8 @@ Page({
     showLogin: false,
     isLoggedIn: false,
     userInfo: null,
-    localMode: false
+    localMode: false,
+    showConfetti: false
   },
 
   onLoad() {
@@ -40,14 +41,27 @@ Page({
     this._blingAudio.src = 'audio/bling.mp3';
   },
 
-  onReady() {
-    this._initConfettiCanvas();
+  // 撒花 canvas 按需挂载：canvas 在真机是原生组件，渲染在独立原生层，
+  // 常驻全屏会挡住整屏触摸事件（pointer-events 对原生组件无效），
+  // 所以只有抽签开签瞬间才挂载，动画播完立即卸载。
+  launchConfetti() {
+    if (this._confettiRunning) return;
+    this._confettiRunning = true;
+    this._confettiNode = null;
+    this._confettiCtx = null;
+    this.setData({ showConfetti: true }, () => {
+      this._initConfettiCanvas(() => this._runConfetti());
+    });
   },
 
-  _initConfettiCanvas() {
+  _initConfettiCanvas(onReady) {
     const q = wx.createSelectorQuery();
     q.select('#confettiCanvas').fields({ node: true, size: true }).exec((res) => {
-      if (!res || !res[0] || !res[0].node) return;
+      if (!res || !res[0] || !res[0].node) {
+        this._confettiRunning = false;
+        this.setData({ showConfetti: false });
+        return;
+      }
       const canvas = res[0].node;
       const ctx = canvas.getContext('2d');
       const info = (wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync());
@@ -59,15 +73,18 @@ Page({
       this._confettiCtx = ctx;
       this._confettiW = res[0].width;
       this._confettiH = res[0].height;
+      if (onReady) onReady();
     });
   },
 
-  launchConfetti() {
-    if (this._confettiRunning) return;
+  _runConfetti() {
     const canvas = this._confettiNode;
     const ctx = this._confettiCtx;
-    if (!canvas || !ctx) return;
-    this._confettiRunning = true;
+    if (!canvas || !ctx) {
+      this._confettiRunning = false;
+      this.setData({ showConfetti: false });
+      return;
+    }
     const W = this._confettiW || 300;
     const H = this._confettiH || 600;
     const cx = W / 2;
@@ -131,6 +148,8 @@ Page({
       } else {
         ctx.clearRect(0, 0, W, H);
         this._confettiRunning = false;
+        // 动画播完立即卸载 canvas，恢复整屏可点击
+        this.setData({ showConfetti: false });
       }
     };
     canvas.requestAnimationFrame(step);

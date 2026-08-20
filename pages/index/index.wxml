@@ -49,8 +49,9 @@
     </view>
   </view>
 
-  <!-- 开签撒花粒子层（全屏覆盖，常驻，绘制时显示） -->
-  <canvas type="2d" id="confettiCanvas" class="confetti-canvas"></canvas>
+  <!-- 开签撒花粒子层：仅在抽签动画期间渲染。canvas 是真机原生组件，
+       常驻全屏会遮挡所有触摸事件（pointer-events 对原生组件无效），故按需挂载 -->
+  <canvas wx:if="{{showConfetti}}" type="2d" id="confettiCanvas" class="confetti-canvas"></canvas>
 
   <!-- 引流卡片区（公众号 + 个人微信）：localMode=false 时显示 -->
   <view class="promo-section" wx:if="{{!localMode}}">
