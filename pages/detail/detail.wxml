@@ -85,7 +85,7 @@
           <image class="expand-icon-svg" src="/images/icon-shouqi.png" mode="aspectFit"/>
         </view>
         <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="sendMessage">
-          <text>咨询阿鹏</text>
+          <text>发送</text>
         </view>
       </view>
       <textarea class="expand-textarea"
@@ -110,7 +110,7 @@
              bindconfirm="sendMessage"
              adjust-position="{{true}}"/>
       <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="sendMessage">
-        <text>咨询阿鹏</text>
+        <text>发送</text>
       </view>
     </view>
   </view>

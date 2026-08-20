@@ -4,6 +4,8 @@ page {
 }
 
 .page {
+  /* border-box：padding 计入 100vh 内，内容不超屏时整页不可滚动 */
+  box-sizing: border-box;
   min-height: 100vh;
   padding: 20rpx 24rpx;
   padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
@@ -140,30 +142,7 @@ page {
   color: rgba(180, 160, 140, 0.35);
 }
 
-/* 今天：红圈⭕️（不填充背景，数字可见） */
-.cal-day.today .day-num {
-  color: #A8201A;
-  font-weight: bold;
-}
-
-.cal-day.today {
-  position: relative;
-}
-
-.cal-day.today .day-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52rpx;
-  height: 52rpx;
-  border: 3rpx solid #A8201A;
-  border-radius: 50%;
-  color: #A8201A;
-  font-weight: bold;
-  font-size: 26rpx;
-}
-
-/* 选中日期：同样红圈 */
+/* 选中日期：红圈（唯一的圆圈标记，同一时刻只有一个） */
 .cal-day.selected .day-num {
   display: inline-flex;
   align-items: center;
@@ -180,6 +159,17 @@ page {
 .cal-day.has-record .day-num {
   color: #A8201A;
   font-weight: bold;
+}
+
+/* 今天：橙色数字（圆圈专属选中态，今天不带圈）；置于 has-record 后保证优先 */
+.cal-day.today .day-num {
+  color: #F59E0B;
+  font-weight: bold;
+}
+
+/* 今天同时被选中：红圈内橙色数字 */
+.cal-day.today.selected .day-num {
+  color: #F59E0B;
 }
 
 .day-dot {
