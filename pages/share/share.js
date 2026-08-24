@@ -144,7 +144,8 @@ Page({
 
   onShareAppMessage() {
     const share = this.data.share
-    const title = share ? `阿鹏趣签·第${share.signId}签` : '阿鹏趣签'
+    const yijiShort = ((share && share.yiji) || '').replace(/[。.！!？?\s]+$/, '')
+    const title = share ? (`第${share.signId}签` + (yijiShort ? '·' + yijiShort : '')) : '阿鹏趣签'
     return {
       title: title,
       path: '/pages/share/share?shareId=' + (share ? share._id : ''),

@@ -407,7 +407,7 @@ Page({
   /* ========== 分享 ========== */
   onShareAppMessage() {
     return {
-      title: '阿鹏趣签 - 心诚则灵',
+      title: '趣签一根·好运连连🍀',
       path: '/pages/index/index',
       imageUrl: '/images/jieqian-share-fu.png'
     };
@@ -415,7 +415,7 @@ Page({
 
   onShareTimeline() {
     return {
-      title: '阿鹏趣签 - 心诚则灵',
+      title: '趣签一根·好运连连🍀',
       imageUrl: '/images/jieqian-share-fu.png'
     };
   }

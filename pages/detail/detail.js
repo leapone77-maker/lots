@@ -763,7 +763,8 @@ Page({
   // 微信原生分享菜单回调（右上角 "..." → 转发给朋友）
   onShareAppMessage() {
     const shareId = this.data._shareId || ''
-    const title = `阿鹏趣签·第${this.data.drawnId || ''}签`
+    const yijiShort = ((this.data.qian && this.data.qian.yiji) || '').replace(/[。.！!？?\s]+$/, '')
+    const title = `第${this.data.drawnId || ''}签` + (yijiShort ? '·' + yijiShort : '')
     this._refreshShare()    // 真正发起转发才写库（异步不阻塞面板；shareId 确定性强幂等）
     this.grantShareBonus()  // 进入转发流程即触发分享奖励（尽力而为，不阻塞面板）
     if (shareId) {
