@@ -263,6 +263,97 @@ async function callInterp(systemContent, userQuestion, chatHistory) {
   })
 }
 
+/**
+ * 健壮解析 AI 返回（模型偶发不守规矩：正文写一遍又把 JSON 贴后面）
+ * 三段式提取 { answer, profile }：
+ *   ① 全文本身就是纯 JSON → 直接 parse
+ *   ② 从 ```代码围栏里提取（倒序尝试，围栏通常出现在尾部）
+ *   ③ 花括号配对：定位 {"answer" 所在的最外层大括号
+ * 三段全失败时兜底清洗：剥掉代码块/JSON 残余，用户永远看不到裸代码
+ */
+function _answerOk(o) {
+  return o && typeof o === 'object' && typeof o.answer === 'string' && o.answer.length > 0
+}
+
+// 从指定下标的大括号起做配对扫描（识别字符串与转义），返回配平片段或 null
+function _matchBraces(text, start) {
+  var depth = 0, inStr = false, esc = false
+  for (var i = start; i < text.length; i++) {
+    var c = text[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+    } else {
+      if (c === '"') inStr = true
+      else if (c === '{') depth++
+      else if (c === '}') {
+        depth--
+        if (depth === 0) return text.slice(start, i + 1)
+      }
+    }
+  }
+  return null
+}
+
+function _fallbackClean(text) {
+  var t = String(text || '')
+  t = t.replace(/```[\s\S]*?```/g, '')          // 成对代码块整体移除
+  t = t.replace(/```[\s\S]*$/g, '')             // 未闭合的尾部代码块
+  var idx = t.lastIndexOf('{"answer"')
+  if (idx > 0) t = t.slice(0, idx)              // 尾部裸 JSON
+  t = t.trim()
+  return t || '抱歉，阿鹏这边一时没接上话，稍后再试试吧 🙏'
+}
+
+function extractJsonReply(raw) {
+  var text = String(raw || '').trim()
+  var obj = null
+
+  // ① 全文是纯 JSON
+  try {
+    var o1 = JSON.parse(text)
+    if (_answerOk(o1)) obj = o1
+  } catch (e) {}
+
+  // ② 代码围栏（倒序：模型"正文在前、JSON 在后"时取尾部围栏）
+  if (!obj) {
+    var fences = text.match(/```(?:json|JSON)?\s*[\s\S]*?```/g) || []
+    for (var i = fences.length - 1; i >= 0; i--) {
+      var body = fences[i].replace(/^```(?:json|JSON)?\s*/, '').replace(/```\s*$/, '')
+      try {
+        var o2 = JSON.parse(body.trim())
+        if (_answerOk(o2)) { obj = o2; break }
+      } catch (e) {}
+    }
+  }
+
+  // ③ 花括号配对：从 "answer" 键向前找最近的 { 开始配平
+  if (!obj) {
+    var keyIdx = text.indexOf('"answer"')
+    if (keyIdx !== -1) {
+      var start = text.lastIndexOf('{', keyIdx)
+      while (start >= 0 && !obj) {
+        var snippet = _matchBraces(text, start)
+        if (snippet) {
+          try {
+            var o3 = JSON.parse(snippet)
+            if (_answerOk(o3)) obj = o3
+          } catch (e) {}
+        }
+        start = start > 0 ? text.lastIndexOf('{', start - 1) : -1
+      }
+    }
+  }
+
+  if (obj) {
+    console.log('[chat] AI返回JSON提取成功')
+    return { answer: obj.answer, profile: Array.isArray(obj.profile) ? obj.profile : [] }
+  }
+  console.log('[chat] AI返回无法解析为JSON，走兜底清洗')
+  return { answer: _fallbackClean(text), profile: [] }
+}
+
 exports.main = async function(event, context) {
   // 定时触发器（config.json 中的 timer）每天触发：物理删除 shares 中已过期的分享快照
   if (event && event.Type === 'timer') {
@@ -484,28 +575,12 @@ exports.main = async function(event, context) {
         console.log('[chat] 配额累加完成 account=' + caller.account + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
       }
 
-      // ---- 解析 AI 返回的 JSON，提取画像 ----
-      var answerText = reply
-      var profileItems = []
-      try {
-        var cleaned = reply.trim()
-        if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7)
-        else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3)
-        if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3)
-        cleaned = cleaned.trim()
-        
-        var parsed = JSON.parse(cleaned)
-        if (parsed && typeof parsed.answer === 'string' && parsed.answer.length > 0) {
-          answerText = parsed.answer
-          if (Array.isArray(parsed.profile)) {
-            profileItems = parsed.profile.filter(function(item) {
-              return item && item.text && (item.type === 'permanent' || item.type === 'recent')
-            })
-          }
-        }
-      } catch(e) {
-        console.log('[chat] JSON解析失败，使用原始文本:', e.message)
-      }
+      // ---- 解析 AI 返回的 JSON，提取画像（三段式健壮提取 + 兜底清洗）----
+      var extracted = extractJsonReply(reply)
+      var answerText = extracted.answer
+      var profileItems = extracted.profile.filter(function(item) {
+        return item && item.text && (item.type === 'permanent' || item.type === 'recent')
+      })
 
       // ---- 异步保存画像（不阻塞返回）----
       if (profileItems.length > 0 && caller && caller._id) {
