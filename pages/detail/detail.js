@@ -17,7 +17,8 @@ Page({
     _hasShownBasic: true,  // 详情页自动展示解答，标记为已展示
     localMode: true,       // 纯本地模式(默认true=隐藏输入框)；false=开启深度解读
     remainCount: null,     // 当日剩余咨询次数（null=不适用/未登录/本地模式）
-    dailyLimit: 1,         // 当日基础上限（1=基础；分享成功后临时为2），用于判断是否显示分享引导
+    dailyLimit: 1,         // 当日基础上限（恒为1）
+    bonusEligible: false,  // 是否可通过分享再领1次（次数用完且今日未领过时为true，前端据此显示分享引导）
     centerToast: { show: false, text: '' },  // 屏幕中间 toast（内联实现）
     inputExpanded: false,  // 输入框是否展开为大文本域
     userProfile: '',       // 用户画像文本（从云端获取，不展示给用户）
@@ -207,9 +208,9 @@ Page({
       data: { action: 'getQuota', token: token }
     }).then(res => {
       if (res.result && res.result.code === 0 && typeof res.result.remain === 'number') {
-        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || 1 })
+        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || 1, bonusEligible: res.result.bonusEligible === true })
       } else {
-        this.setData({ remainCount: null, dailyLimit: 1 })
+        this.setData({ remainCount: null, dailyLimit: 1, bonusEligible: false })
       }
     }).catch(() => { this.setData({ remainCount: null }) })
   },
@@ -443,7 +444,7 @@ Page({
       this._persistChat();
       // 更新当日剩余咨询次数
       if (typeof res.result?.remain === 'number') {
-        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || this.data.dailyLimit });
+        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || this.data.dailyLimit, bonusEligible: typeof res.result.bonusEligible === 'boolean' ? res.result.bonusEligible : this.data.bonusEligible });
       }
       // 云端记录当日聊天（仅登录且非本地模式）
       this._recordCloudChat(reply);
@@ -681,7 +682,7 @@ Page({
   },
 
   // 分享奖励发放：进入转发流程时调用（用户发起转发那一刻触发 onShareAppMessage）。
-  // 云函数侧校验发奖条件（基础已用完且当天未领过）并用条件更新防并发
+  // 云函数侧校验发奖条件（次数用完且当天未领过）并用条件更新防并发
   grantShareBonus() {
     const token = this.data.userInfo && this.data.userInfo.token
     if (!token || this.data.localMode || !this.data.isLoggedIn) return
@@ -690,7 +691,7 @@ Page({
       data: { action: 'grantShareBonus', token: token }
     }).then(res => {
       if (res.result && res.result.code === 0) {
-        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || this.data.dailyLimit })
+        this.setData({ remainCount: res.result.remain, dailyLimit: res.result.dailyLimit || this.data.dailyLimit, bonusEligible: typeof res.result.bonusEligible === 'boolean' ? res.result.bonusEligible : this.data.bonusEligible })
         if (res.result.granted) {
           this.showCenterToast('分享成功，新获得 1 次咨询！')
         }

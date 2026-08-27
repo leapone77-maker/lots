@@ -54,7 +54,7 @@
 
 云开发控制台 → 数据库 → 添加集合：
 
-- `users`（字段自动创建，无需手填）：account / password / token / nickname / created / **dailyLimit(每日咨询上限,默认1) / dialogCount(当日已用) / dialogDate(计数日期,北京时间跨天重置)**
+- `users`（字段自动创建，无需手填）：account / password / token / nickname / created(注册日期,北京时间 YYYY-MM-DD) / **dailyLimit(每日基础上限,恒为1) / dialogCount(当日配额状态码:0未使用 1用完可领分享 2已领待使用 3全部用完) / dialogDate(状态日期,北京时间跨天重置)**
 - `memories`：uid(关联users._id) / account(冗余便于人工排查) / **tag**([分类]+标签文本,如"[life]2026年本命年") / created(北京时间"2026-07-31 10:19:27")
 
 两个集合权限都设为 **「仅创建者可读写」**。

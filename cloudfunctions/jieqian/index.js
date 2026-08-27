@@ -11,7 +11,10 @@
  *
  * 数据库集合（需在云开发控制台手动创建）：
  *   - users    : { _id, account, password, token, nickname, created, dailyLimit, dialogCount, dialogDate }
- *        dailyLimit=每日可咨询次数上限(默认1；用完基础次数后分享成功会临时升为2，跨天重置回1); dialogCount=当日已用次数; dialogDate=计数对应日期(北京时间)，跨天重置
+ *        created=注册日期(北京时间 YYYY-MM-DD 字符串); dailyLimit=每日基础上限(恒为1，代码不再改动);
+ *        dialogCount=当日配额状态码(不新增字段)：0=未使用 1=基础1次已用完(此时分享可领1次)
+ *                    2=已领分享奖励待使用 3=全部用完(分享不再发放，等北京0点重置);
+ *        dialogDate=状态对应日期(北京时间)，跨天自动重置回0
  *   - memories: { _id, uid, profile, updatedAt }
  *        uid=关联 users._id（唯一索引，每用户一条）
  *        profile = { permanent: "长期事实文本", recent: [{text, date}] }
@@ -30,7 +33,8 @@
  *   - shares: { _id(shareId), signId, level, poemText, basic, yiji,
  *              chats:[{role,content}], uid, account, nickname, createdAt, expireAt }
  *        shareId=10位混淆短码(主键)，由 uid+signId 确定性生成，同一用户同一签文只存一份；
- *        expireAt=过期时间戳(7天=7*24h)，每次分享会刷新；getShareById 只读读取、不校验 token；另有定时触发器 cleanExpiredShares 每天物理删除过期记录
+ *        createdAt=创建时间(北京时间字符串 "2026-08-27 10:25:33")，expireAt=过期时间(同上格式，7天=7*24h)，每次分享会刷新；
+ *        getShareById 只读读取、不校验 token；另有定时触发器 cleanExpiredShares 每天物理删除过期记录
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -76,12 +80,13 @@ async function authByToken(token) {
 }
 
 // 定时清理：物理删除 shares 集合中 expireAt 已过期的分享快照（每日定时触发器触发）
+// expireAt 格式：北京时间字符串 "2026-08-27 10:25:33"，与当前北京时间字符串比较（字典序=时间序）
 async function cleanExpiredShares() {
   const _ = db.command
-  const now = Date.now()
-  const r = await shares.where({ expireAt: _.lt(now) }).remove()
+  const nowStr = beijingDateTimeStr()
+  const r = await shares.where({ expireAt: _.lt(nowStr) }).remove()
   const removed = (r && r.stats) ? r.stats.removed : 0
-  console.log('[cleanExpiredShares] removed=' + removed + ' before=' + new Date(now).toISOString())
+  console.log('[cleanExpiredShares] removed=' + removed + ' now=' + nowStr)
   return { code: 0, removed: removed }
 }
 
@@ -94,22 +99,57 @@ function beijingDateStr() {
   return y + '-' + m + '-' + d
 }
 
+// 北京时间日期+时分秒字符串（用于 shares.createdAt / expireAt）
+function beijingDateTimeStr() {
+  const bj = new Date(Date.now() + 8 * 60 * 60 * 1000)
+  const y = bj.getUTCFullYear()
+  const m = String(bj.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(bj.getUTCDate()).padStart(2, '0')
+  const h = String(bj.getUTCHours()).padStart(2, '0')
+  const mi = String(bj.getUTCMinutes()).padStart(2, '0')
+  const s = String(bj.getUTCSeconds()).padStart(2, '0')
+  return y + '-' + m + '-' + d + ' ' + h + ':' + mi + ':' + s
+}
+
+// 把毫秒时间戳转成北京时间字符串（用于 createShare 计算 expireAt）
+function beijingTsToStr(ts) {
+  const bj = new Date(ts + 8 * 60 * 60 * 1000)
+  const y = bj.getUTCFullYear()
+  const m = String(bj.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(bj.getUTCDate()).padStart(2, '0')
+  const h = String(bj.getUTCHours()).padStart(2, '0')
+  const mi = String(bj.getUTCMinutes()).padStart(2, '0')
+  const s = String(bj.getUTCSeconds()).padStart(2, '0')
+  return y + '-' + m + '-' + d + ' ' + h + ':' + mi + ':' + s
+}
+
 // 解析当日配额：按登录账号取记录，跨天自动重置；无登录账号返回 null
-// 返回 { caller, used, limit, today, onDate }
+// dailyLimit 恒为 1；不新增字段，dialogCount 存配额状态码：
+//   0=未使用 1=基础1次已用完(可领分享奖励) 2=已领分享奖励待使用 3=全部用完
+// 返回 { caller, state, used, remain, today, onDate }
 async function resolveQuota(token) {
   if (!token) return null
   const caller = await authByToken(token)
   if (!caller) return null
   const today = beijingDateStr()
-  let used = caller.dialogCount || 0
+  let state = caller.dialogCount || 0
   let onDate = caller.dialogDate || ''
   const limit = (typeof caller.dailyLimit === 'number' && caller.dailyLimit > 0) ? caller.dailyLimit : 1
   if (onDate !== today) {
-    used = 0
+    state = 0
     onDate = today
     await users.doc(caller._id).update({ data: { dialogCount: 0, dialogDate: today, dailyLimit: 1 } })
+  } else if (caller.dailyLimit === 2) {
+    // 兼容旧版语义：旧逻辑发过分享奖励会把 dailyLimit 写成 2，归一化为新状态码并归 1：
+    //   旧 dialogCount=1（领了奖励还没用）→ 新状态2（已领待使用）
+    //   旧 dialogCount=2（奖励也用完了）  → 新状态3（全部用完）
+    state = (caller.dialogCount || 0) >= 2 ? 3 : 2
+    await users.doc(caller._id).update({ data: { dialogCount: state, dailyLimit: 1 } })
   }
-  return { caller, used, limit, today, onDate }
+  // used=已消耗次数(用于日志)；remain=剩余可咨询次数
+  const used = (state === 2) ? 1 : (state >= 3 ? 2 : (state >= 1 ? 1 : 0))
+  const remain = (state === 0 || state === 2) ? 1 : 0
+  return { caller, state, used, remain, today, onDate }
 }
 
 /**
@@ -388,10 +428,10 @@ exports.main = async function(event, context) {
               password: password,
               token: tk,
               nickname: nickname,
-              created: Date.now(),
-              dailyLimit: 1,   // 每日可咨询次数上限（未来按会员身份设置不同值，免费=1）
-              dialogCount: 0,  // 当日已咨询次数
-              dialogDate: ''   // 当日计数对应的日期（北京时间），跨天重置
+              created: beijingDateStr(), // 注册日期（北京时间，YYYY-MM-DD，与 dialogDate 同格式）
+              dailyLimit: 1,   // 每日基础上限（恒为1，代码不再改动；未来按会员身份设置不同值）
+              dialogCount: 0,  // 当日配额状态码：0=未使用 1=用完可领分享 2=已领待使用 3=全部用完
+              dialogDate: ''   // 状态对应日期（北京时间），跨天重置回0
             }
           })
           console.log('[register] 新建用户成功 _id=' + (addRes && addRes._id) + ' account=' + account + ' token=' + tk.slice(0, 8) + '...')
@@ -552,10 +592,11 @@ exports.main = async function(event, context) {
 
       // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
       // testMode=true 时为测试态：跳过配额限制，AI 咨询无限次
+      // 状态码：0/2 有剩余可咨询，1/3 已用完
       var remain = null
       if (!testMode) {
         var quota = await resolveQuota(callerToken)
-        if (quota.used >= quota.limit) {
+        if (quota.remain <= 0) {
           return { code: 429, content: '今日咨询次数已用完，明天再来找阿鹏聊聊吧 🙏' }
         }
       }
@@ -566,13 +607,14 @@ exports.main = async function(event, context) {
       // 调用远程解读服务
       var reply = await callInterp(systemPrompt, question, history)
 
-      // 调用成功，累加当日配额并算剩余次数（仅非测试态）
+      // 调用成功，推进配额状态并算剩余次数（仅非测试态）
+      // 状态推进：0(用基础)→1  2(用分享返还)→3
       if (!testMode) {
         var quota2 = await resolveQuota(callerToken)
-        var newUsed = (quota2.onDate === quota2.today ? quota2.used : 0) + 1
-        await users.doc(quota2.caller._id).update({ data: { dialogCount: newUsed, dialogDate: quota2.today } })
-        remain = quota2.limit - newUsed
-        console.log('[chat] 配额累加完成 account=' + caller.account + ' used=' + newUsed + '/' + quota2.limit + ' remain=' + remain)
+        var newState = quota2.state === 2 ? 3 : 1
+        await users.doc(quota2.caller._id).update({ data: { dialogCount: newState, dialogDate: quota2.today } })
+        remain = (newState === 0 || newState === 2) ? 1 : 0
+        console.log('[chat] 配额状态更新 account=' + caller.account + ' state=' + newState + ' remain=' + remain)
       }
 
       // ---- 解析 AI 返回的 JSON，提取画像（三段式健壮提取 + 兜底清洗）----
@@ -632,11 +674,12 @@ exports.main = async function(event, context) {
       }
 
       // 返回给前端的是解签正文（不含 profile）
+      // bonusEligible=是否还能通过分享领1次（新状态为1才行），前端据此显示分享引导
       if (!testMode) {
-        return { code: 0, content: answerText, remain: remain, dailyLimit: quota2.limit }
+        return { code: 0, content: answerText, remain: remain, dailyLimit: quota2.limit, bonusEligible: newState === 1 }
       } else {
         console.log('[chat] 测试态，跳过配额统计')
-        return { code: 0, content: answerText, remain: null, dailyLimit: null }
+        return { code: 0, content: answerText, remain: null, dailyLimit: null, bonusEligible: false }
       }
     }
 
@@ -651,26 +694,26 @@ exports.main = async function(event, context) {
       }
       var q = await resolveQuota(event.token)
       if (!q) return { code: 401, remain: null, dailyLimit: null }
-      return { code: 0, remain: q.limit - q.used, dailyLimit: q.limit }
+      return { code: 0, remain: q.remain, dailyLimit: q.limit, bonusEligible: q.state === 1 }
     }
 
-    // ---- 分享成功发放额外咨询次数（无新增字段，复用 dailyLimit）----
-    // 规则：仅当今天上限仍是基础值(1) 且 基础次数已用完(used>=1) 才发奖，把 dailyLimit 临时升为 2
-    // 用 where({_id, dailyLimit:1}) 条件更新，并发下也只 +1 次，避免快速重复点击刷次数
+    // ---- 分享成功返还 1 次咨询（不加新字段，只改 dialogCount 状态码）----
+    // 规则：仅状态 1（基础1次已用完）可领取；领取后状态置 2（获得1次待使用）
+    // 状态 0（没用完）/ 2（已领过待使用）/ 3（全部用完）均不发放
+    // 用 where({_id, dialogDate, dialogCount:1}) 条件更新防并发，快速重复点击只发 1 次
+    // 状态 2 再用完变 3 后分享不再发放，等北京时间 0 点重置
     if (action === 'grantShareBonus') {
       const caller = await authByToken(event.token)
       if (!caller) return { code: 401, msg: '未登录' }
-      const q = await resolveQuota(event.token)  // 先确保跨天已重置（dailyLimit 回到 1）
+      const q = await resolveQuota(event.token)  // 先确保跨天已重置
       if (!q) return { code: 401, remain: null, dailyLimit: null }
-      // 未到发奖条件：基础未用完 / 已领过奖励（dailyLimit 已为 2）
-      if (q.limit !== 1 || q.used < 1) {
-        return { code: 0, granted: false, remain: q.limit - q.used, dailyLimit: q.limit }
+      if (q.state !== 1) {
+        return { code: 0, granted: false, remain: q.remain, dailyLimit: q.limit, bonusEligible: false }
       }
-      const _ = db.command
-      const upd = await users.where({ _id: caller._id, dailyLimit: 1 }).update({ data: { dailyLimit: 2 } })
+      const upd = await users.where({ _id: caller._id, dialogDate: q.today, dialogCount: 1 }).update({ data: { dialogCount: 2 } })
       const affected = (upd && upd.stats) ? upd.stats.updated : (upd ? upd.updated : 0)
-      const q2 = await resolveQuota(event.token)
-      return { code: 0, granted: affected > 0, remain: q2.limit - q2.used, dailyLimit: q2.limit }
+      const granted = affected > 0
+      return { code: 0, granted: granted, remain: granted ? 1 : 0, dailyLimit: q.limit, bonusEligible: false }
     }
 
     // ---- 清空全部测试数据（users + memories）----
@@ -829,8 +872,8 @@ exports.main = async function(event, context) {
         chats: Array.isArray(snap.chats) ? snap.chats : [],
         uid: caller._id,
         account: caller.account,
-        createdAt: now,
-        expireAt: now + 7 * 24 * 60 * 60 * 1000   // 7天(7*24h)过期
+        createdAt: beijingDateTimeStr(),
+        expireAt: beijingTsToStr(now + 7 * 24 * 60 * 60 * 1000)   // 7天(7*24h)过期
       }
       await shares.doc(shareId).set({ data: doc })
       console.log('[createShare] shareId=' + shareId + ' chats=' + doc.chats.length + ' account=' + caller.account)
@@ -844,7 +887,7 @@ exports.main = async function(event, context) {
       try {
         const res = await shares.doc(shareId).get()
         if (!res.data) return { code: 404, msg: '分享不存在' }
-        if (res.data.expireAt && res.data.expireAt < Date.now()) return { code: 410, msg: '分享已过期' }
+        if (res.data.expireAt && res.data.expireAt < beijingDateTimeStr()) return { code: 410, msg: '分享已过期' }
         return { code: 0, share: res.data }
       } catch (e) {
         if (e.errCode === -1 || (e.message && e.message.includes('not exist'))) return { code: 404, msg: '分享不存在' }

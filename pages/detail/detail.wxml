@@ -71,7 +71,7 @@
   <view class="input-bar" wx:if="{{!localMode}}">
     <view class="quota-tip" wx:if="{{remainCount !== null}}">
       <text wx:if="{{remainCount > 0}}">今日还可咨询 {{remainCount}} 次</text>
-      <block wx:elif="{{dailyLimit === 1}}">
+      <block wx:elif="{{bonusEligible}}">
         <text class="quota-guide">分享签运结果给朋友，可再获得 1 次咨询</text>
         <button class="quota-share-btn" open-type="share" bindtap="onShareTap">去分享</button>
       </block>
