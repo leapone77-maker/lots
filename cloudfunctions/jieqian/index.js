@@ -217,6 +217,12 @@ function buildSystemPrompt(qian, profileText, question) {
     if (qian.basic) {
       p += '\n\n基础解签：' + qian.basic
     }
+    if (qian.yiji) {
+      p += '\n\n宜忌：' + qian.yiji
+    }
+    if (qian.action) {
+      p += '\n\n今日行动建议：' + qian.action
+    }
   }
 
   // 用户画像（动态注入，替代旧的 memories 标签列表）
@@ -868,6 +874,7 @@ exports.main = async function(event, context) {
         poemText: snap.poemText || '',
         basic: snap.basic || null,
         yiji: snap.yiji || null,
+        action: snap.action || null,
         nickname: snap.nickname || '',
         chats: Array.isArray(snap.chats) ? snap.chats : [],
         uid: caller._id,

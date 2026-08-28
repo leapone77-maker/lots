@@ -295,6 +295,7 @@ Page({
         poemRaw: qian.poem,
         basic: qian.basic,
         yiji: qian.yiji || '',
+        action: qian.action || '',
         keywords: qian.keywords || []
       });
 
@@ -309,7 +310,8 @@ Page({
         poemText: Array.isArray(qian.poem) ? qian.poem.join('\n') : qian.poem,
         poemRaw: qian.poem,
         basic: qian.basic,
-        yiji: qian.yiji || ''
+        yiji: qian.yiji || '',
+        action: qian.action || ''
       });
       wx.setStorageSync('drawHistory', history.slice(0, 100));
 

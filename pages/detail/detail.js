@@ -393,11 +393,14 @@ Page({
   /* ========== 深度解读 ========== */
   callInterp(userQuestion) {
     const profile = this.getUserProfile();
+    const q = this.data.qian || {}
     const qianInfo = this.data.hasDrawn ? {
       id: this.data.drawnId,
       level: this.data.drawnLevel,
       poem: this.data.drawnPoem,
-      basic: this.data.drawnBasic
+      basic: this.data.drawnBasic,
+      yiji: q.yiji || '',
+      action: q.action || ''
     } : null;
 
     let finalQuestion = userQuestion;
@@ -490,6 +493,9 @@ Page({
     }
     if (q.yiji) {
       lines.push('宜忌：' + q.yiji)
+    }
+    if (q.action) {
+      lines.push('行动：' + q.action)
     }
     const text = lines.join('\n')
     wx.showActionSheet({
@@ -736,6 +742,7 @@ Page({
       poemText: q.poemText,
       basic: q.basic || null,
       yiji: q.yiji || null,
+      action: q.action || null,
       nickname: (this.data.userInfo && this.data.userInfo.nickname) || '',
       chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
     }

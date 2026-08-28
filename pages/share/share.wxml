@@ -51,6 +51,13 @@
           <text class="yiji-label">【宜忌】</text>
           <text class="yiji-text">{{share.yiji}}</text>
         </view>
+
+        <view class="card-divider" wx:if="{{share.action}}"></view>
+
+        <view class="action-section" wx:if="{{share.action}}">
+          <text class="action-label">【行动】</text>
+          <text class="action-text">{{share.action}}</text>
+        </view>
       </view>
 
       <!-- 聊天记录 -->

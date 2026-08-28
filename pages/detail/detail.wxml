@@ -45,6 +45,15 @@
         <text class="yiji-text">{{qian.yiji}}</text>
       </view>
 
+      <!-- 分隔线 -->
+      <view class="card-divider" wx:if="{{qian.action}}"></view>
+
+      <!-- 行动（自动展示） -->
+      <view class="action-section" wx:if="{{qian.action}}">
+        <text class="action-label">【行动】</text>
+        <text class="action-text">{{qian.action}}</text>
+      </view>
+
       <view class="card-tip" wx:if="{{!localMode && !isLoggedIn}}">
         <text>💬 登录账号，可以得到更详细、更个性化的解读！</text>
       </view>
