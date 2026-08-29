@@ -15,7 +15,7 @@
  *        dialogCount=当日配额状态码(不新增字段)：0=未使用 1=基础1次已用完(此时分享可领1次)
  *                    2=已领分享奖励待使用 3=全部用完(分享不再发放，等北京0点重置);
  *        dialogDate=状态对应日期(北京时间)，跨天自动重置回0
- *   - memories: { _id, uid, profile, updatedAt }
+ *   - memories: { _id, uid, account, profile, updatedAt }
  *        uid=关联 users._id（唯一索引，每用户一条）
  *        profile = { permanent: "长期事实文本", recent: [{text, date}] }
  *        updatedAt = 最后更新时间戳(Date.now())
@@ -505,15 +505,22 @@ exports.main = async function(event, context) {
         return (now - itemDate) < 30 * 24 * 60 * 60 * 1000
       })
 
+      // 互斥清理：已在长期画像里的句子，不再留在近期画像（存量脏数据在此收敛）
+      recentArr = recentArr.filter(function(r) {
+        return !(r && r.text && permText.indexOf(r.text) !== -1)
+      })
+
       profileItems.forEach(function(item) {
         if (!item.text) return
         if (item.type === 'permanent') {
-          // 追加去重
+          // 升为长期：先把近期列表里的同句移除，避免两处并存
+          recentArr = recentArr.filter(function(r) { return r.text !== item.text })
           if (permText.indexOf(item.text) === -1) {
             permText = permText ? permText + '，' + item.text : item.text
           }
         } else {
-          // recent：追加（同text不重复）
+          // 已在长期画像里则跳过，不重复记近期
+          if (permText.indexOf(item.text) !== -1) return
           var exists = recentArr.some(function(r) { return r.text === item.text })
           if (!exists) {
             recentArr.push({ text: item.text, date: today })
@@ -524,12 +531,13 @@ exports.main = async function(event, context) {
       var newProfile = { permanent: permText, recent: recentArr }
 
       if (existing) {
+        // 顺手回填：旧记录缺 account 时补上当前登录用户的手机号
         await memories.doc(existing._id).update({
-          data: { profile: newProfile, updatedAt: now }
+          data: { profile: newProfile, updatedAt: now, account: u.account || existing.account || '' }
         })
       } else {
         await memories.add({
-          data: { uid: uid, profile: newProfile, updatedAt: now }
+          data: { uid: uid, account: u.account || '', profile: newProfile, updatedAt: now }
         })
       }
 
@@ -555,6 +563,9 @@ exports.main = async function(event, context) {
       var now = Date.now()
       var recentTexts = []
       recentArr.forEach(function(item) {
+        if (!item || !item.text) return
+        // 读取兜底：已在长期画像里的句子不再重复输出（存量脏数据即时生效）
+        if (permText.indexOf(item.text) !== -1) return
         var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
         var daysDiff = Math.floor((now - itemDate) / (24 * 60 * 60 * 1000))
         if (daysDiff >= 30) return  // 超过30天，不加入
@@ -654,13 +665,23 @@ exports.main = async function(event, context) {
               var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
               return (now2 - itemDate) < 30 * 24 * 60 * 60 * 1000
             })
-            
+
+            // 互斥清理：已在长期画像里的句子，不再留在近期画像
+            recentArr = recentArr.filter(function(r) {
+              return !(r && r.text && permText.indexOf(r.text) !== -1)
+            })
+
             profileItems.forEach(function(item) {
+              if (!item || !item.text) return
               if (item.type === 'permanent') {
+                // 升为长期：先把近期列表里的同句移除，避免两处并存
+                recentArr = recentArr.filter(function(r) { return r.text !== item.text })
                 if (permText.indexOf(item.text) === -1) {
                   permText = permText ? permText + '，' + item.text : item.text
                 }
               } else {
+                // 已在长期画像里则跳过，不重复记近期
+                if (permText.indexOf(item.text) !== -1) return
                 var exists = recentArr.some(function(r) { return r.text === item.text })
                 if (!exists) recentArr.push({ text: item.text, date: today })
               }
@@ -668,9 +689,10 @@ exports.main = async function(event, context) {
             
             var newProfile = { permanent: permText, recent: recentArr }
             if (existing) {
-              await memories.doc(existing._id).update({ data: { profile: newProfile, updatedAt: now2 } })
+              // 顺手回填：旧记录缺 account 时补上当前登录用户的手机号
+              await memories.doc(existing._id).update({ data: { profile: newProfile, updatedAt: now2, account: caller.account || existing.account || '' } })
             } else {
-              await memories.add({ data: { uid: caller._id, profile: newProfile, updatedAt: now2 } })
+              await memories.add({ data: { uid: caller._id, account: caller.account || '', profile: newProfile, updatedAt: now2 } })
             }
             console.log('[chat] 画像已保存')
           } catch(saveErr) {
