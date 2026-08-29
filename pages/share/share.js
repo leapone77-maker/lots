@@ -1,4 +1,15 @@
 const app = getApp()
+const { QIAN_DB } = require('../../utils/qianData.js')
+
+// 旧分享快照无 action 字段时，从本地签文库按签号兜底补齐
+function fillQianFields(obj) {
+  if (!obj) return obj
+  var q = QIAN_DB.find(function (x) { return x.id === Number(obj.signId) })
+  if (!q) return obj
+  if (!obj.action && q.action) obj.action = q.action
+  if (!obj.yiji && q.yiji) obj.yiji = q.yiji
+  return obj
+}
 
 Page({
   data: {
@@ -24,7 +35,7 @@ Page({
       }
     }).then(res => {
       if (res.result && res.result.code === 0) {
-        const share = res.result.share
+        const share = fillQianFields(res.result.share)
         const chatMessages = (share.chats || []).map(m => {
           const isHtml = typeof m.content === 'string' && /<[a-z][\s\S]*>/i.test(m.content)
           if (isHtml) {

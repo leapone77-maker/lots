@@ -101,7 +101,8 @@ Page({
         level: q ? q.level : '未知',
         poemTitle: (q && q.poem && q.poem[0]) ? q.poem[0] : ('第' + sign + '签'),
         basic: q ? q.basic : null,
-        yiji: q ? q.yiji : ''
+        yiji: q ? q.yiji : '',
+        action: q ? q.action : ''
       });
     });
     records.sort((a, b) => b.date.localeCompare(a.date));
@@ -249,6 +250,7 @@ Page({
       poemRaw: poemArr,
       basic: record.basic || fullQian.basic || null,
       yiji: record.yiji || fullQian.yiji || '',
+      action: record.action || fullQian.action || '',
       keywords: fullQian.keywords || []
     });
     wx.navigateTo({

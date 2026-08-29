@@ -2,6 +2,17 @@ const { getBeijingDateStr } = require('../../utils/dateUtil.js');
 const guest = require('../../utils/guest.js');
 const config = require('../../utils/config.js');
 const { convertEmoji } = require('../../utils/emoji.js');
+const { QIAN_DB } = require('../../utils/qianData.js');
+
+// 旧缓存/旧记录无 action 等字段时，从本地签文库按签号兜底补齐
+function fillQianFields(qian) {
+  if (!qian) return qian;
+  const q = QIAN_DB.find(x => x.id === Number(qian.id));
+  if (!q) return qian;
+  if (!qian.action && q.action) qian.action = q.action;
+  if (!qian.yiji && q.yiji) qian.yiji = q.yiji;
+  return qian;
+}
 
 Page({
   data: {
@@ -32,6 +43,7 @@ Page({
     const historyDate = options && options.date ? decodeURIComponent(options.date) : '';
 
     if (cachedQian) {
+      fillQianFields(cachedQian);
       this.setData({
         qian: cachedQian,
         hasDrawn: true,
@@ -44,13 +56,14 @@ Page({
       this._chatDate = historyDate || cachedQian.date || getBeijingDateStr();
     } else if (options && options.id) {
       // 兜底：从参数构建（仅基本信息）
+      const fallbackQian = fillQianFields({
+        id: options.id,
+        level: decodeURIComponent(options.level || '未知'),
+        poemText: '',
+        basic: null
+      });
       this.setData({
-        qian: {
-          id: options.id,
-          level: decodeURIComponent(options.level || '未知'),
-          poemText: '',
-          basic: null
-        },
+        qian: fallbackQian,
         hasDrawn: true,
         drawnId: options.id,
         drawnLevel: decodeURIComponent(options.level || '未知')
@@ -87,6 +100,9 @@ Page({
   onShow() {
     // 每次显示时刷新签到状态（可能从历史页点进来）
     const cachedQian = wx.getStorageSync('cachedQian');
+    if (cachedQian) {
+      fillQianFields(cachedQian);
+    }
     if (cachedQian && !this.data.qian) {
       this.setData({
         qian: cachedQian,
