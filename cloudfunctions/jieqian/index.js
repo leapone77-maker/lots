@@ -203,6 +203,46 @@ function verifyIdentity(prompt) {
 }
 
 /**
+ * 读取用户画像文本（按 uid 从 memories 表读取并拼接）
+ * - 长期画像 permanent + 近期画像 recent（带时间衰减）
+ * - 互斥兜底：已在 permanent 里的句子不再从 recent 输出
+ * @param {string} uid 用户 _id
+ * @returns {Promise<string>} 画像文本，无数据返回空字符串
+ */
+async function loadProfileText(uid) {
+  if (!uid) return ''
+  try {
+    var res = await memories.where({ uid: uid }).get()
+    if (!res.data || res.data.length === 0) return ''
+    var doc = res.data[0]
+    var profile = doc.profile || {}
+    var permText = profile.permanent || ''
+    var recentArr = Array.isArray(profile.recent) ? profile.recent : []
+
+    var now = Date.now()
+    var recentTexts = []
+    recentArr.forEach(function(item) {
+      if (!item || !item.text) return
+      // 互斥兜底：已在长期画像里的句子不再重复输出
+      if (permText.indexOf(item.text) !== -1) return
+      var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
+      var daysDiff = Math.floor((now - itemDate) / (24 * 60 * 60 * 1000))
+      if (daysDiff >= 30) return  // 超过30天，不加入
+      if (daysDiff >= 15) {
+        recentTexts.push('此前' + item.text)  // 降权，标"此前"
+      } else {
+        recentTexts.push(item.text)
+      }
+    })
+
+    return [permText].concat(recentTexts).filter(Boolean).join('；')
+  } catch (e) {
+    console.error('[loadProfileText] 读取画像失败:', e.message)
+    return ''
+  }
+}
+
+/**
  * 构建 System Prompt —— 基础提示词(PROMPT.md) + 动态签文/画像
  */
 function buildSystemPrompt(qian, profileText, question) {
@@ -550,33 +590,7 @@ exports.main = async function(event, context) {
       var token = event.token
       var u = await authByToken(token)
       if (!u) return { code: 401, memories: [], profile: '' }
-      var res = await memories.where({ uid: u._id }).get()
-      if (!res.data || res.data.length === 0) {
-        return { code: 0, memories: [], profile: '' }
-      }
-      var doc = res.data[0]
-      var profile = doc.profile || {}
-      var permText = profile.permanent || ''
-      var recentArr = Array.isArray(profile.recent) ? profile.recent : []
-
-      // 拼接画像文本：recent >=15天标"此前"，>=30天删除
-      var now = Date.now()
-      var recentTexts = []
-      recentArr.forEach(function(item) {
-        if (!item || !item.text) return
-        // 读取兜底：已在长期画像里的句子不再重复输出（存量脏数据即时生效）
-        if (permText.indexOf(item.text) !== -1) return
-        var itemDate = new Date(item.date + 'T00:00:00+08:00').getTime()
-        var daysDiff = Math.floor((now - itemDate) / (24 * 60 * 60 * 1000))
-        if (daysDiff >= 30) return  // 超过30天，不加入
-        if (daysDiff >= 15) {
-          recentTexts.push('此前' + item.text)  // 降权，标"此前"
-        } else {
-          recentTexts.push(item.text)
-        }
-      })
-
-      var fullProfile = [permText].concat(recentTexts).filter(Boolean).join('；')
+      var fullProfile = await loadProfileText(u._id)
       return { code: 0, memories: [], profile: fullProfile }
     }
 
@@ -606,6 +620,14 @@ exports.main = async function(event, context) {
         console.error('[chat] 完整功能模式但无有效登录态，token=' + (callerToken ? callerToken.slice(0, 8) + '...' : '(空)'))
         return { code: 401, content: '请先登录后再咨询，或退出小程序重新登录 🙏' }
       }
+
+      // 画像以 memories 数据表为准：前端是异步加载的，可能还没加载完就发消息导致传空，
+      // 这里云函数自己查一次，保证 AI 一定能看到最新的画像；查不到才回退用前端传的。
+      var cloudProfile = await loadProfileText(caller._id)
+      if (cloudProfile) {
+        profileText = cloudProfile
+      }
+      console.log('[chat] 画像来源=' + (cloudProfile ? 'memories表' : '无') + ' 长度=' + profileText.length)
 
       // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
       // testMode=true 时为测试态：跳过配额限制，AI 咨询无限次
