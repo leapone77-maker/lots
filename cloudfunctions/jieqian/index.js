@@ -245,7 +245,7 @@ async function loadProfileText(uid) {
 /**
  * 构建 System Prompt —— 基础提示词(PROMPT.md) + 动态签文/画像
  */
-function buildSystemPrompt(qian, profileText, question) {
+function buildSystemPrompt(qian, profileText, question, forceDirective) {
   let p = BASE_PROMPT
 
   // 签文信息（动态注入）
@@ -270,6 +270,11 @@ function buildSystemPrompt(qian, profileText, question) {
     p += '\n\n【求签人的个人背景】'
     p += '\n' + profileText
     p += '\n\n（以上是系统从该用户过往对话中自动提取的画像信息，解读时自然引用以拉近距离，像老朋友一样记得对方说过的话。切忌生硬罗列。）'
+  }
+
+  // 代码层强制分支指令：直接告诉 AI 本次必须走完整模板还是信息不足短回复，不给它判断余地
+  if (forceDirective) {
+    p += '\n\n' + forceDirective
   }
 
   // 身份校验：每次发送前校对，不能偏离
@@ -627,7 +632,13 @@ exports.main = async function(event, context) {
       if (cloudProfile) {
         profileText = cloudProfile
       }
-      console.log('[chat] 画像来源=' + (cloudProfile ? 'memories表' : '无') + ' 长度=' + profileText.length)
+      console.log('[chat] uid=' + caller._id + ' 画像来源=' + (cloudProfile ? 'memories表' : '无') + ' 长度=' + profileText.length)
+
+      // 代码层强制决定分支：memories 有数据 → 必须完整模板；无数据且输入短 → 才允许信息不足短回复
+      var hasProfile = !!(profileText && profileText.length > 0)
+      var forceDirective = hasProfile
+        ? '【本次强制指令】系统已从 memories 数据表中读取到用户画像，本次必须输出完整模板（900-1500字，包含：开头、签诗逐句解读、事业解析、感情解析、财运解析、健康解析、行动指引、总的来说），严禁使用「信息不足时的回应」短回复，严禁照搬任何示例。'
+        : '【本次强制指令】系统未从 memories 数据表中读取到可用画像，且用户输入极短，本次必须走「信息不足时的回应」（三段，不超过300字）。'
 
       // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
       // testMode=true 时为测试态：跳过配额限制，AI 咨询无限次
@@ -641,7 +652,7 @@ exports.main = async function(event, context) {
       }
 
       // 构建带记忆的 system prompt
-      var systemPrompt = buildSystemPrompt(qian, profileText, question)
+      var systemPrompt = buildSystemPrompt(qian, profileText, question, forceDirective)
 
       // 调用远程解读服务
       var reply = await callInterp(systemPrompt, question, history)
