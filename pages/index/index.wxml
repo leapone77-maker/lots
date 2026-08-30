@@ -1,4 +1,11 @@
-<view class="page">
+<view class="page" bindtap="onTapKoi">
+  <!-- 锦鲤背景层：z-index 0，会游到签筒/二维码背后；点击判定在 page 根容器上做距离判断 -->
+  <view class="koi-layer">
+    <view class="koi-clip" style="transform:{{koiTransform}};transition-duration:{{koiDuration}}ms;transition-timing-function:{{koiTiming}}">
+      <image class="koi-flip" src="/images/koi.webp" style="transform:{{koiFlip}}"/>
+    </view>
+  </view>
+
   <!-- 顶部导航：标题（动态对齐胶囊） -->
   <view class="nav-bar" style="padding-top:{{navBarTop}}px">
     <view class="nav-content" style="height:{{navBarHeight}}px; line-height:{{navBarHeight}}px">

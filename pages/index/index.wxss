@@ -18,8 +18,46 @@ page {
     linear-gradient(180deg, #FCF8F0 0%, #F5F0E6 45%, #EFE7D6 100%);
 }
 
+/* ===== 锦鲤背景层（z-index:0，主功能全部 z-index>=2，故在背后游动） ===== */
+.koi-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+}
+
+/* 单帧裁剪窗口：JS 只改这个节点的 transform，CSS 负责补间。
+   容器保持水平只平移不 rotate —— 防止转向时大角度补间造成侧翻。
+   但素材画布 224rpx×245rpx 是竖向的（v2 旧图），v3 舒展图是 252×140 横向，
+   为兼容新素材改成 252rpx×140rpx */
+.koi-clip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 252rpx;
+  height: 140rpx;
+  overflow: hidden;
+  transition-property: transform;
+  transition-timing-function: ease-in-out;
+  will-change: transform;
+}
+
+/* 锦鲤本体：动画 WebP 自带摆动；
+   方向表达全在这一层：scaleX(±1) 镜像翻转 + 固定小倾角摆头，
+   过渡 0.3s 看起来像自然转身，不是翻滚 */
+.koi-flip {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease;
+  transform-origin: 50% 50%;
+}
+
 /* ===== 顶部导航栏（动态对齐胶囊） ===== */
 .nav-bar {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -72,6 +110,7 @@ page {
 /* ===== 签筒区域（钉在屏幕垂直正中心，不受顶/底元素影响，放大1.5倍） ===== */
 .tube-area {
   position: absolute;
+  z-index: 2;
   top: 50%;
   left: 0;
   right: 0;
@@ -365,6 +404,8 @@ page {
 
 /* ===== 引流卡片区（公众号 + 个人微信，localMode=false 时显示，贴底） ===== */
 .promo-section {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -447,6 +488,8 @@ page {
 
 /* ===== 底部提示文字（localMode=true 时显示，贴底） ===== */
 .bottom-tip {
+  position: relative;
+  z-index: 2;
   text-align: center;
   padding: 0 0 calc(50rpx + env(safe-area-inset-bottom));  /* 贴底；想上移就加大这个底部间距 */
   margin-top: auto;

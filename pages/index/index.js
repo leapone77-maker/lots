@@ -17,7 +17,12 @@ Page({
     isLoggedIn: false,
     userInfo: null,
     localMode: false,
-    showConfetti: false
+    showConfetti: false,
+    // 锦鲤背景：koiTransform 走 CSS transition，JS 只在换目标点时才 setData
+    koiReady: false,
+    koiTransform: 'translate3d(0,0,0)',
+    koiFlip: 'scaleX(1)',
+    koiDuration: 0
   },
 
   onLoad() {
@@ -40,6 +45,145 @@ Page({
     // 开签铃声（清脆 bling，本地音频）
     this._blingAudio = wx.createInnerAudioContext();
     this._blingAudio.src = 'audio/bling.mp3';
+    this._initKoi();
+  },
+
+  onHide() {
+    this._koiClear();
+  },
+
+  onUnload() {
+    this._koiClear();
+  },
+
+  /* ===================== 锦鲤背景 =====================
+   * 游动靠 CSS transition 补间，JS 只在「选新目标点」时 setData 一次，
+   * 频率约 3~8 秒一次，不占 JS 线程、不卡。
+   * 锦鲤层 z-index:0，签筒/二维码等主功能 z-index>=2，所以能游到它们背后藏起来。
+   * ================================================== */
+
+  _initKoi() {
+    const sys = wx.getSystemInfoSync();
+    const w = sys.windowWidth;
+    const h = sys.windowHeight;
+    const sx = w / 750;                 // rpx -> px（750rpx = 屏宽）
+    this._koi = {
+      w, h, sx,
+      clipW: 252 * sx,                  // 与 wxss 中 .koi-clip 的 252rpx / 140rpx 对应（v3 舒展素材）
+      clipH: 140 * sx,
+      x: w * (0.25 + Math.random() * 0.5),
+      y: h * (0.3 + Math.random() * 0.25),
+      speed: 42,                        // px/s，慢悠悠地游
+      timer: null,
+      restTimer: null
+    };
+    const t = this._koi;
+    this.setData({
+      koiReady: true,
+      koiTransform: `translate3d(${t.x - t.clipW / 2}px, ${t.y - t.clipH / 2}px, 0)`,
+      koiFlip: 'scaleX(1) rotate(-12deg)',
+      koiDuration: 0,
+      koiTiming: 'ease-in-out'
+    });
+    this._koiSchedule(700 + Math.random() * 900);
+  },
+
+  _koiSchedule(delay) {
+    const t = this._koi;
+    if (!t) return;
+    clearTimeout(t.timer);
+    t.timer = setTimeout(() => this._koiSwim(), delay);
+  },
+
+  // 游动范围边界：顶部导航之下、二维码引流区之上，可游到签筒背后
+  _koiBounds() {
+    const t = this._koi;
+    const m = 14;
+    return {
+      m: m,
+      top: 92 * t.sx + 20,                          // 顶部导航栏之下
+      bottom: t.h - 450 * t.sx                      // 二维码引流区（约450rpx含底部间距）之上
+    };
+  },
+
+  // 随机挑下一个目标点：主要横向游，偏离水平不超过 35°，避免垂直乱窜
+  _koiSwim() {
+    const t = this._koi;
+    const b = this._koiBounds();
+    let tx = t.x, ty = t.y;
+    for (let i = 0; i < 10; i++) {
+      const goRight = Math.random() < 0.5;
+      const rad = ((goRight ? 0 : 180) + (Math.random() * 70 - 35)) * Math.PI / 180;
+      const dist = 100 + Math.random() * 260;       // 步长拉长，覆盖更大范围
+      tx = t.x + Math.cos(rad) * dist;
+      ty = t.y + Math.sin(rad) * dist;
+      if (tx >= b.m && tx <= t.w - b.m && ty >= b.top && ty <= b.bottom) break;
+    }
+    tx = Math.min(Math.max(tx, b.m), t.w - b.m);
+    ty = Math.min(Math.max(ty, b.top), b.bottom);
+    this._koiMoveTo(tx, ty, t.speed);
+  },
+
+  // timing: 正常游 'ease-in-out'；点击加速 'cubic-bezier(0.2,0.6,0.3,1)' 柔和起步、尾段减速
+  _koiMoveTo(tx, ty, speed, timing) {
+    const t = this._koi;
+    const dx = tx - t.x;
+    const dy = ty - t.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 26) {                    // 目标太近，重新挑
+      this._koiSchedule(400);
+      return;
+    }
+    const goRight = dx >= 0;
+    // 防翻滚：容器只平移（translate3d），永远不 rotate；
+    // 方向+倾角全在 flip 层：scaleX(±1) 镜像 + rotate(-12deg) 摆头，0.3s 完成，
+    // 最大倾角就 12°，绝不可能转 180° 或鱼肚朝上。
+    const flip = goRight ? -1 : 1;
+    const dur = Math.min(6000, (dist / speed) * 1000);
+
+    t.x = tx;
+    t.y = ty;
+    this.setData({
+      koiTransform: `translate3d(${tx - t.clipW / 2}px, ${ty - t.clipH / 2}px, 0)`,
+      koiFlip: `scaleX(${flip}) rotate(-12deg)`,
+      koiDuration: Math.round(dur),
+      koiTiming: timing || 'ease-in-out'
+    });
+
+    // 游到位后停一会儿，再继续下一段
+    clearTimeout(t.restTimer);
+    t.restTimer = setTimeout(() => {
+      this._koiSchedule(1300 + Math.random() * 2800);
+    }, dur + 80);
+  },
+
+  // 点到锦鲤附近：朝远离手指的方向游开；60px/s 加速，但只加速这一段，到位后恢复正常。
+  // 绑在 page 根容器上（冒泡），做距离判定，避免鱼游到签筒/二维码背后时点不中
+  onTapKoi(e) {
+    const t = this._koi;
+    if (!t) return;
+    const d = e.detail || {};
+    const tk = (e.touches && e.touches[0]) || {};
+    const px = typeof d.x === 'number' ? d.x : (typeof tk.clientX === 'number' ? tk.clientX : t.w / 2);
+    const py = typeof d.y === 'number' ? d.y : (typeof tk.clientY === 'number' ? tk.clientY : t.h / 2);
+    // 只有点在以鱼为中心、半径 130px 内才算"点鱼"，否则是页面其它交互，忽略
+    const dist = Math.sqrt((px - t.x) * (px - t.x) + (py - t.y) * (py - t.y));
+    if (dist > 130) return;
+    let dx = t.x - px, dy = t.y - py;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    dx /= len; dy /= len;
+    const b = this._koiBounds();
+    const tx = Math.min(Math.max(t.x + dx * 260, b.m), t.w - b.m);
+    const ty = Math.min(Math.max(t.y + dy * 210, b.top), b.bottom);
+    // 60px/s + 起步柔和冲刺、尾段平滑减速，只作用这一段，到位后下一段恢复常速 ease-in-out
+    this._koiMoveTo(tx, ty, 60, 'cubic-bezier(0.2, 0.6, 0.3, 1)');
+  },
+
+  _koiClear() {
+    const t = this._koi;
+    if (!t) return;
+    clearTimeout(t.timer);
+    clearTimeout(t.restTimer);
   },
 
   // 撒花 canvas 按需挂载：canvas 在真机是原生组件，渲染在独立原生层，
@@ -173,6 +317,8 @@ Page({
       this.checkDailyLimit();
       this.checkLogin();
     });
+    // 从详情页/后台回来，恢复锦鲤游动（onHide 时已清定时器）
+    if (this._koi) this._koiSchedule(600 + Math.random() * 900);
   },
 
   // 跨天重置：用户从后台切回前台时，若已跨过 0 点且当前 canDraw=false，
