@@ -8,7 +8,7 @@
       <view class="qian-header">
         <view class="qian-header-left">
           <view class="qian-badge">{{qian.level}}</view>
-          <text class="qian-title">第 {{qian.id}} 签 · {{qian.level}}</text>
+          <text class="qian-title">第 {{qian.id}} 签 · {{drawDate}}</text>
         </view>
         <!-- 分享按钮：用普通 view 做绝对定位容器，避免 button 默认 width:100% 干扰 -->
         <view class="qian-share-wrap" wx:if="{{hasDrawn && !localMode}}">

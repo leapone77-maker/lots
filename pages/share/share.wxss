@@ -288,3 +288,29 @@ page {
   font-size: 26rpx;
   line-height: 1.6;
 }
+
+/* 底部 CTA 按钮 */
+.cta-section {
+  padding: 40rpx 24rpx 60rpx;
+  display: flex;
+  justify-content: center;
+}
+
+.cta-btn {
+  width: 400rpx;
+  height: 88rpx;
+  background: linear-gradient(135deg, #C23B22 0%, #A8201A 100%);
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: bold;
+  letter-spacing: 2rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 20rpx rgba(168,32,26,0.3);
+}
+
+.cta-btn::after {
+  border: none;
+}

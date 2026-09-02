@@ -34,7 +34,10 @@
  *              chats:[{role,content}], uid, account, nickname, createdAt, expireAt }
  *        shareId=10位混淆短码(主键)，由 uid+signId 确定性生成，同一用户同一签文只存一份；
  *        createdAt=创建时间(北京时间字符串 "2026-08-27 10:25:33")，expireAt=过期时间(同上格式，7天=7*24h)，每次分享会刷新；
- *        getShareById 只读读取、不校验 token；另有定时触发器 cleanExpiredShares 每天物理删除过期记录
+ *        getShareById 只读读取、不校验 token；过期记录三管齐下清理：
+ *        ① getShareById 读到即删（兜底，永远生效，不依赖任何配置）
+ *        ② action='cleanShares' 手动触发清理（云函数「测试」里执行，适合免费版无定时触发器入口的环境）
+ *        ③ config.json 定时触发器 cleanExpiredShares（每日 0 点，如环境支持触发器则自动生效）
  */
 const cloud = require('wx-server-sdk')
 const fs = require('fs')
@@ -200,6 +203,59 @@ function verifyIdentity(prompt) {
   if (!prompt || !prompt.includes(EXPECTED_IDENTITY)) {
     throw new Error('身份校验失败：System Prompt 未包含「' + EXPECTED_IDENTITY + '」，已阻止发送，避免以错误身份对外作答。')
   }
+}
+
+/**
+ * 场景关键词词典：用户输入含其中任何一个词 → 视为有意义问句，走完整模板。
+ * 覆盖事业/感情/财运/健康/学业/生活决策/社交关系等常见签文咨询场景。
+ * 词不在词典但问句足够长（>10字）也会走完整模板，见 _isMeaninglessInput。
+ */
+var SCENE_KEYWORDS = [
+  // 事业/工作
+  '谈判', '工作', '事业', '老板', '客户', '升职', '跳槽', '辞职', '面试', '加班', '裁员', '离职',
+  '签约', '合同', '项目', '汇报', '演讲', '晋升', '调岗', '创业', '合作', '合伙', '投资',
+  // 感情
+  '感情', '恋爱', '对象', '相亲', '分手', '复合', '表白', '结婚', '婚姻', '老公', '老婆',
+  '男朋友', '女朋友', '暗恋', '出轨', '吵架', '冷战',
+  // 财运
+  '财运', '赚钱', '理财', '股票', '基金', '买房', '卖房', '贷款', '借钱', '欠款', '报销',
+  // 健康
+  '健康', '体检', '生病', '手术', '吃药', '失眠', '减肥', '健身', '复查', '看病',
+  // 学业
+  '考试', '考研', '考公', '上岸', '论文', '毕业', '留学', '升学',
+  // 生活决策/社交
+  '拍照', '旅行', '搬家', '出行', '出差', '聚会', '饭局', '送礼', '求人', '帮忙',
+  '贵人', '小人', '朋友', '同事', '家人', '父母', '孩子', '孩子', '宠物'
+]
+
+/**
+ * 判断输入是否为"无意义纯指令"：只有这类输入 + 无画像时才走短回复。
+ * 规则：
+ *   ① 输入长度 ≤ 5 → 直接判无意义（如"解签""111""看看"）
+ *   ② 长度 6-10 且不含任何场景关键词 → 无意义（如"帮我看看签"）
+ *   ③ 长度 > 10 → 一律有意义（完整问句，如"今天适合拍照吗"）
+ *   ④ 任何长度若含场景关键词 → 有意义（如"谈判"两个字）
+ */
+function _isMeaninglessInput(input) {
+  if (!input || typeof input !== 'string') return true
+  var s = input.trim().replace(/[\s\p{P}\p{S}]/gu, '')  // 去掉空白和标点
+  if (s.length === 0) return true                        // 纯空白/标点
+  if (s.length <= 5) {
+    // 短输入若含场景关键词仍有意义（如"谈判"）
+    for (var i = 0; i < SCENE_KEYWORDS.length; i++) {
+      if (s.includes(SCENE_KEYWORDS[i])) return false
+    }
+    return true
+  }
+  if (s.length <= 10) {
+    // 中等长度：含关键词 → 有意义；不含 → 无意义
+    for (var i = 0; i < SCENE_KEYWORDS.length; i++) {
+      if (s.includes(SCENE_KEYWORDS[i])) return false
+    }
+    return true
+  }
+  // 长输入一律视为有意义问句
+  return false
 }
 
 /**
@@ -451,6 +507,15 @@ exports.main = async function(event, context) {
     return await cleanExpiredShares()
   }
   var action = event.action
+  // 手动触发一次清理（用于没有定时触发器的环境，在云函数「测试」里执行即可）：
+  // 测试参数填 { "action": "cleanShares" }，返回 { code:0, removed:N }
+  if (action === 'cleanShares') {
+    try {
+      return await cleanExpiredShares()
+    } catch (e) {
+      return { code: 500, msg: e.message }
+    }
+  }
 
   try {
     // ---- 注册 / 登录（账号+密码，自动注册）----
@@ -634,11 +699,14 @@ exports.main = async function(event, context) {
       }
       console.log('[chat] uid=' + caller._id + ' 画像来源=' + (cloudProfile ? 'memories表' : '无') + ' 长度=' + profileText.length)
 
-      // 代码层强制决定分支：memories 有数据 → 必须完整模板；无数据且输入短 → 才允许信息不足短回复
+      // 代码层强制决定分支：memories 有数据 → 必须完整模板；
+      // 无数据时再看用户输入是否有意义——能提取出场景关键词（拍照/谈判等）→ 完整模板；
+      // 只有"短指令/无意义字符 + 无画像"才走信息不足短回复
       var hasProfile = !!(profileText && profileText.length > 0)
-      var forceDirective = hasProfile
-        ? '【本次强制指令】系统已从 memories 数据表中读取到用户画像，本次必须输出完整模板（900-1500字，包含：开头、签诗逐句解读、事业解析、感情解析、财运解析、健康解析、行动指引、总的来说），严禁使用「信息不足时的回应」短回复，严禁照搬任何示例。'
-        : '【本次强制指令】系统未从 memories 数据表中读取到可用画像，且用户输入极短，本次必须走「信息不足时的回应」（三段，不超过300字）。'
+      var isMeaningless = !hasProfile && _isMeaninglessInput(question)
+      var forceDirective = (hasProfile || !isMeaningless)
+        ? '【本次强制指令】本次必须输出完整模板（900-1500字，包含：开头、签诗逐句解读、事业解析、感情解析、财运解析、健康解析、行动指引、总的来说），严禁使用「信息不足时的回应」短回复，严禁照搬任何示例。'
+        : '【本次强制指令】用户输入为无意义短指令且无画像，本次必须走「信息不足时的回应」（三段，不超过300字）。'
 
       // ---- 每日配额校验（按登录账号，北京时间 0 点重置）----
       // testMode=true 时为测试态：跳过配额限制，AI 咨询无限次
@@ -793,6 +861,33 @@ exports.main = async function(event, context) {
       return { code: 0, config: await readConfig() }
     }
 
+    // ---- 统计本月实际抽签的天数（去重），供首页锦鲤按天数从小到大 ----
+    // 入参：month 形如 "2026-08"；返回 { code:0, days }，days 为去重后的抽签天数
+    if (action === 'getKoiDays') {
+      const token = event.token || ''
+      const month = event.month || ''
+      if (!/^\d{4}-\d{2}$/.test(month)) return { code: 1, msg: '月份格式应为 YYYY-MM' }
+      let uid = ''
+      if (token) {
+        const caller = await authByToken(token)
+        if (caller) uid = caller._id
+      }
+      if (!uid && event.guestId) { uid = event.guestId }
+      if (!uid) return { code: 401, msg: '缺少身份' }
+      const _ = db.command
+      // date 形如 "2026-08-31"，用字符串范围覆盖整个月（任意月 '31' 字符串都 >= 实际最后一天）
+      const start = month + '-01'
+      const end = month + '-31'
+      const res = await draws
+        .where({ uid, date: _.gte(start).and(_.lte(end)) })
+        .field({ date: true })
+        .limit(1000)
+        .get()
+      const days = new Set((res.data || []).map(function (d) { return d.date })).size
+      console.log('[getKoiDays] uid=' + uid + ' month=' + month + ' days=' + days)
+      return { code: 0, days: days }
+    }
+
     // ---- 写入当日签号到 draws 集合（一天一条，upsert），供历史页跨设备展示 ----
     // 身份：已登录用 token 解析 uid；未登录用前端设备游客ID（guest_xxx），登录后由 mergeGuest 并入账号
     if (action === 'recordDraw') {
@@ -931,6 +1026,7 @@ exports.main = async function(event, context) {
         yiji: snap.yiji || null,
         action: snap.action || null,
         nickname: snap.nickname || '',
+        drawDate: snap.drawDate || '',     // 抽签日期（YYYY-MM-DD），与详情页一致
         chats: Array.isArray(snap.chats) ? snap.chats : [],
         uid: caller._id,
         account: caller.account,
@@ -949,7 +1045,11 @@ exports.main = async function(event, context) {
       try {
         const res = await shares.doc(shareId).get()
         if (!res.data) return { code: 404, msg: '分享不存在' }
-        if (res.data.expireAt && res.data.expireAt < beijingDateTimeStr()) return { code: 410, msg: '分享已过期' }
+        if (res.data.expireAt && res.data.expireAt < beijingDateTimeStr()) {
+          // 读到即过期：顺手物理删除（兜底清理，不依赖定时触发器），并提示已过期
+          try { await shares.doc(shareId).remove() } catch (e) { console.warn('[getShareById] 清理过期分享失败:', e.message) }
+          return { code: 410, msg: '分享已过期' }
+        }
         return { code: 0, share: res.data }
       } catch (e) {
         if (e.errCode === -1 || (e.message && e.message.includes('not exist'))) return { code: 404, msg: '分享不存在' }

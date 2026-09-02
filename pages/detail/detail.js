@@ -33,7 +33,8 @@ Page({
     centerToast: { show: false, text: '' },  // 屏幕中间 toast（内联实现）
     inputExpanded: false,  // 输入框是否展开为大文本域
     userProfile: '',       // 用户画像文本（从云端获取，不展示给用户）
-    _shareId: ''           // 分享快照 ID（云函数返回）
+    _shareId: '',          // 分享快照 ID（云函数返回）
+    drawDate: ''           // 抽签日期（YYYY-MM-DD），显示在签号后面
   },
 
   onLoad(options) {
@@ -54,6 +55,7 @@ Page({
       });
       // 聊天记录按"抽签日期"隔离：同一天的签共享同一段对话，跨天/换签则开新会话
       this._chatDate = historyDate || cachedQian.date || getBeijingDateStr();
+      this.setData({ drawDate: this._chatDate });
     } else if (options && options.id) {
       // 兜底：从参数构建（仅基本信息）
       const fallbackQian = fillQianFields({
@@ -69,6 +71,7 @@ Page({
         drawnLevel: decodeURIComponent(options.level || '未知')
       });
       this._chatDate = historyDate || getBeijingDateStr();
+      this.setData({ drawDate: this._chatDate });
     }
 
     this.appConfig = config.getCachedConfig();
@@ -760,6 +763,7 @@ Page({
       yiji: q.yiji || null,
       action: q.action || null,
       nickname: (this.data.userInfo && this.data.userInfo.nickname) || '',
+      drawDate: this._chatDate,           // 抽签日期（YYYY-MM-DD），分享页显示用
       chats: this.data.chatMessages.map(m => ({ role: m.role, content: m.content }))
     }
 

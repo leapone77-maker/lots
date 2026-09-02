@@ -1,8 +1,14 @@
 <view class="page" bindtap="onTapKoi">
-  <!-- 锦鲤背景层：z-index 0，会游到签筒/二维码背后；点击判定在 page 根容器上做距离判断 -->
-  <view class="koi-layer">
-    <view class="koi-clip" style="transform:{{koiTransform}};transition-duration:{{koiDuration}}ms;transition-timing-function:{{koiTiming}}">
-      <image class="koi-flip" src="/images/koi.webp" style="transform:{{koiFlip}}"/>
+  <!-- 锦鲤背景层：position:fixed 触发 canvas 同层渲染，使 z-index 生效，
+       签筒（z-index:2）才能压在鱼之上，鱼游到签筒位置会被挡住。
+       top 由 JS 传入 koiLayerTop（导航栏总高），让 fixed 坐标系与 .page 对齐。
+       ⚠️ 绝不能把本层放进 .tube-area —— .tube-area 有 transform: translateY(-50%) scale(1.5)，
+       会成为 fixed/absolute 后代的 containing block 并连带缩放，导致鱼定位错乱。 -->
+  <view class="koi-layer" style="top:{{koiLayerTop}}px">
+    <view class="koi-clip" style="width:{{koiW}}rpx;height:{{koiH}}rpx;left:{{koiX}}px;top:{{koiY}}px">
+      <!-- 锦鲤本体：canvas 2d 逐帧绘制精灵图（与 Lottie 同原理）
+           位移动画在 JS rAF 中计算，不依赖 CSS transition -->
+      <canvas type="2d" id="koiCanvas" class="koi-flip"></canvas>
     </view>
   </view>
 

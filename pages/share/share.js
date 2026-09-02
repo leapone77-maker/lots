@@ -17,7 +17,8 @@ Page({
     expired: false,
     notFound: false,
     share: null,
-    chatMessages: []
+    chatMessages: [],
+    shareDate: ''  // 抽签日期（YYYY-MM-DD），优先取 drawDate；旧数据无 drawDate 时兜底用 createdAt 前 10 位
   },
 
   onLoad(options) {
@@ -52,7 +53,8 @@ Page({
         this.setData({
           loading: false,
           share: share,
-          chatMessages: chatMessages
+          chatMessages: chatMessages,
+          shareDate: share.drawDate || (share.createdAt || '').substring(0, 10)
         })
       } else if (res.result && res.result.code === 410) {
         this.setData({ loading: false, expired: true })

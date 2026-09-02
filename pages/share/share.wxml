@@ -30,7 +30,7 @@
       <view class="qian-card">
         <view class="qian-header">
           <view class="qian-badge">{{share.level}}</view>
-          <text class="qian-title">第 {{share.signId}} 签 · {{share.level}}</text>
+          <text class="qian-title">第 {{share.signId}} 签 · {{shareDate}}</text>
         </view>
 
         <view class="qian-poem-section">
@@ -76,6 +76,11 @@
             </view>
           </view>
         </view>
+      </view>
+
+      <!-- 底部 CTA：引导回流首页抽签 -->
+      <view class="cta-section">
+        <button class="cta-btn" bindtap="goHome">我也去抽一根</button>
       </view>
       </block>
     </view>

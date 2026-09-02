@@ -5,6 +5,14 @@
       {
         "type": "file",
         "value": "NATIVE_GUIDE.md"
+      },
+      {
+        "type": "folder",
+        "value": "preview"
+      },
+      {
+        "type": "regexp",
+        "value": "(^|/)(preview_|action_preview_).*\\.html$"
       }
     ],
     "include": []

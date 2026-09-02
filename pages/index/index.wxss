@@ -18,40 +18,42 @@ page {
     linear-gradient(180deg, #FCF8F0 0%, #F5F0E6 45%, #EFE7D6 100%);
 }
 
-/* ===== 锦鲤背景层（z-index:0，主功能全部 z-index>=2，故在背后游动） ===== */
+/* ===== 锦鲤背景层 =====
+   ⚠️ 三个铁律，改动前务必看清：
+   1. 本层必须是 .page 的**直接子元素**。绝不能放进 .tube-area —— .tube-area 有
+      transform: translateY(-50%) scale(1.5)，会成为后代 fixed/absolute 的 containing block
+      并连带 scale(1.5) 缩放，鱼的定位会彻底错乱。
+   2. 用 position:fixed 而非 absolute —— 这是让 canvas 参与「同层渲染」的触发条件，
+      同层后 canvas 才是普通 DOM 元素、z-index 才生效（否则 canvas 走原生通道，
+      层级永远最高，会盖住签筒；真机 iOS 尤其明显）。
+   3. fixed 参照的是 viewport，而 .page 从导航栏下方开始，所以本层的 top 由 JS
+      传入 koiLayerTop（= 导航栏总高）做偏移，使本层坐标系与 .page 完全对齐，
+      JS 里的 koiX/koiY 因此无需任何补偿。 */
 .koi-layer {
-  position: absolute;
+  position: fixed;
   left: 0;
-  top: 0;
   right: 0;
   bottom: 0;
   z-index: 0;
+  pointer-events: none;          /* 鱼的点击判定放在 page 根容器 onTapKoi 上做距离判断，鱼层不抢事件 */
 }
 
-/* 单帧裁剪窗口：JS 只改这个节点的 transform，CSS 负责补间。
-   容器保持水平只平移不 rotate —— 防止转向时大角度补间造成侧翻。
-   但素材画布 224rpx×245rpx 是竖向的（v2 旧图），v3 舒展图是 252×140 横向，
-   为兼容新素材改成 252rpx×140rpx */
+/* 单帧裁剪窗口：JS rAF 改 left/top 实现平滑游动（不再用 CSS transition，
+   因为原生 canvas 容器上的 transition 时序不可靠，会出现"瞬移"问题）。
+   宽高由 JS 按本月抽签天数缩放（koiW/koiH，第1天0.5 → 第30天2.0）。 */
 .koi-clip {
   position: absolute;
   left: 0;
   top: 0;
-  width: 252rpx;
-  height: 140rpx;
   overflow: hidden;
-  transition-property: transform;
-  transition-timing-function: ease-in-out;
-  will-change: transform;
 }
 
-/* 锦鲤本体：动画 WebP 自带摆动；
-   方向表达全在这一层：scaleX(±1) 镜像翻转 + 固定小倾角摆头，
-   过渡 0.3s 看起来像自然转身，不是翻滚 */
+/* 锦鲤本体：canvas 2d 逐帧绘制（取代 image 组件，绕开 iOS 冻结 GIF 的问题）
+   方向（左/右游）在 canvas drawImage 时用 ctx.scale(-1,1) 翻转，节点零 transform */
 .koi-flip {
   width: 100%;
   height: 100%;
-  transition: transform 0.3s ease;
-  transform-origin: 50% 50%;
+  display: block;
 }
 
 /* ===== 顶部导航栏（动态对齐胶囊） ===== */
