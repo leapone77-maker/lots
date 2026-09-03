@@ -62,6 +62,20 @@ const KOI_TAP = {
 
 // 缩放测试接口：null = 走云端本月抽签天数；填 22/30 等数字 = 强制显示第 N 天的尺寸
 const KOI_DEBUG_DAY = null;
+
+// ========== 点击水波纹参数（想调手感就改这里） ==========
+const KOI_RIPPLE = {
+  LIFE_MS: 3666,          // 单圈波纹生命周期（ms）：调大→扩散更慢更久；调小→更快消散
+  RINGS: [                // 三环同心：主环最亮，副环延迟跟进，先行波最淡最外；颜色统一青蓝
+    { delay: 0,   width: 4.0, alpha: 0.55, color: [125, 200, 230] },  // 主环
+    { delay: 90,  width: 2.6, alpha: 0.38, color: [125, 200, 230] },  // 副环
+    { delay: 180, width: 1.6, alpha: 0.22, color: [125, 200, 230] },  // 先行波
+  ],
+  R0: 8,                  // 初始半径（px）：指尖戳破水面的那一点
+  FADE_EXP: 1.5,          // 透明度衰减指数：>1 前段亮尾段淡得快；<1 更均匀变淡
+  WIDTH_SHRINK: 0.6,      // 线宽随半径变细比例：1=不变细，0=扩散到最大时线宽归零
+  MAX_ALIVE: 6,           // 同时存在的波纹上限：超出丢弃最旧的，防连点爆性能
+};
 // 尺寸映射：第1天 scale 0.3（小只）→ 第30天 1.5（满大），线性；直接变尺寸，不做平滑过渡
 const KOI_SCALE_MIN = 0.3;  // 第 1 天
 const KOI_SCALE_MAX = 1.5;  // 第 30 天
@@ -161,6 +175,7 @@ Page({
     }, () => {
       // setData 回调里 DOM 已就绪，初始化 canvas 节点 + 加载精灵图
       this._koiInitCanvas();
+      this._rippleInitCanvas();
     });
     this._koiSchedule(700 + Math.random() * 900);
     // 非调试模式：拉云端本月抽签天数，更新为真实尺寸（直接变大，不做平滑过渡）
@@ -424,6 +439,9 @@ Page({
     const dist = Math.sqrt((px - t.currX) * (px - t.currX) + (py - t.currY) * (py - t.currY));
     if (dist > radius) return;
 
+    // 点到鱼了：先在触点荡开水波纹（盖过鱼身），再让鱼受惊逃窜
+    this._rippleSpawn(px, py);
+
     // 逃离方向 = 远离手指方向 + 随机角度扰动；被边界夹住则放宽扰动重试。
     // 判定用「纵向占比 |Δy|/总位移」而非绝对值：防止横向长冲刺被误判成"合格"而总是左右跑。
     let dx = t.currX - px, dy = t.currY - py;
@@ -449,12 +467,134 @@ Page({
     this._koiMoveTo(tx, ty, KOI_TAP.SPEED, KOI_TAP.EASING);
   },
 
+  /* ===================== 点击水波纹 =====================
+   * 常驻 canvas 铺满水层、盖在鱼身上（DOM 序在 koi-clip 之后）。
+   * 只有 onTapKoi 判定「点到鱼」时才 push 一个波纹进来；独立 rAF 60fps 绘制，
+   * 与鱼的 160ms 帧循环互不干扰。所有参数集中在 KOI_RIPPLE，想调手感改那里。
+   * ================================================== */
+
+  // 初始化波纹 canvas（铺满水层），在 _initKoi 的 setData 回调里与鱼 canvas 一起建。
+  // ⚠️ 性能关键点：波纹是纯线条，不需要满 dpr 精度——封顶 1.5x，像素数比 3x 少 55%，
+  // 清屏开销同步砍半；且初始化时缓冲设为 1×1（不占合成层），首次点击才真正铺开。
+  _rippleInitCanvas() {
+    const q = wx.createSelectorQuery();
+    q.select('#rippleCanvas').fields({ node: true, size: true }).exec((res) => {
+      if (!res || !res[0] || !res[0].node) {
+        console.error('[ripple] canvas 节点未找到');
+        return;
+      }
+      const canvas = res[0].node;
+      const ctx = canvas.getContext('2d');
+      this._rippleCanvas = canvas;
+      this._rippleCtx = ctx;
+      const info = (wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync());
+      // dpr 封顶 1.5：线条波纹肉眼分不出 1.5x 和 3x 的区别，但像素数少一半以上
+      this._rippleDpr = Math.min(info.pixelRatio || 1, 1.5);
+      // 逻辑尺寸（CSS 像素）记下来，spawn 时按这个 × dpr 设缓冲
+      this._rippleCssW = res[0].width;
+      this._rippleCssH = res[0].height;
+      // 初始缓冲 1×1：不占合成层纹理，等首次点击才真正分配（见 _rippleEnsureBuffer）
+      canvas.width = 1;
+      canvas.height = 1;
+      this._ripples = [];          // 存活着的波纹：{ x, y, t0 }
+      this._rippleRaf = null;
+    });
+  },
+
+  // 确保波纹 canvas 缓冲已按水层尺寸铺开（懒分配：只在有波纹要画时才占资源）
+  _rippleEnsureBuffer() {
+    const canvas = this._rippleCanvas;
+    if (!canvas) return;
+    const wantW = Math.max(1, Math.round(this._rippleCssW * this._rippleDpr));
+    const wantH = Math.max(1, Math.round(this._rippleCssH * this._rippleDpr));
+    if (canvas.width !== wantW || canvas.height !== wantH) {
+      canvas.width = wantW;
+      canvas.height = wantH;
+    }
+  },
+
+  // 生成一个波纹（只有点到鱼才调用）；x/y 为 koi-layer 坐标系下的像素
+  _rippleSpawn(x, y) {
+    if (!this._rippleCtx) return;
+    this._rippleEnsureBuffer();               // 懒分配：首次点击才真正铺开缓冲
+    if (!this._ripples) this._ripples = [];
+    this._ripples.push({ x, y, t0: Date.now() });
+    // 超上限丢最旧的，防连点堆积
+    if (this._ripples.length > KOI_RIPPLE.MAX_ALIVE) {
+      this._ripples.splice(0, this._ripples.length - KOI_RIPPLE.MAX_ALIVE);
+    }
+    // 没跑就启动绘制循环
+    if (!this._rippleRaf) this._rippleLoop();
+  },
+
+  // rAF 绘制循环：60fps 重画所有存活波纹；全死则停循环省电
+  _rippleLoop() {
+    const canvas = this._rippleCanvas, ctx = this._rippleCtx;
+    if (!canvas || !ctx) { this._rippleRaf = null; return; }
+    const now = Date.now();
+    const W = canvas.width / this._rippleDpr;
+    const H = canvas.height / this._rippleDpr;
+    ctx.setTransform(this._rippleDpr, 0, 0, this._rippleDpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // 扩散到屏外的最大半径：取点击点到最远角的距离，保证环完整出屏
+    this._ripples = this._ripples.filter((rp) => now - rp.t0 < KOI_RIPPLE.LIFE_MS + KOI_RIPPLE.RINGS[KOI_RIPPLE.RINGS.length - 1].delay);
+    if (this._ripples.length === 0) {
+      this._rippleRaf = null;
+      // 缓冲归零：释放合成层纹理，空载时零开销
+      canvas.width = 1;
+      canvas.height = 1;
+      return;
+    }
+
+    for (const rp of this._ripples) {
+      const maxR = Math.ceil(Math.sqrt(
+        Math.max(rp.x, W - rp.x) ** 2 + Math.max(rp.y, H - rp.y) ** 2
+      )) + 20;
+      for (const ring of KOI_RIPPLE.RINGS) {
+        const t = now - rp.t0 - ring.delay;
+        if (t < 0) continue;                                   // 副环/先行波还没出发
+        const p = Math.min(1, t / KOI_RIPPLE.LIFE_MS);         // 进度 0→1
+        const eased = 1 - (1 - p) * (1 - p);                   // ease-out：起步冲、尾段缓
+        const r = KOI_RIPPLE.R0 + (maxR - KOI_RIPPLE.R0) * eased;
+        const fade = Math.pow(1 - p, KOI_RIPPLE.FADE_EXP);     // 透明度随进度衰减
+        const widthScale = 1 - p * KOI_RIPPLE.WIDTH_SHRINK;    // 线宽随半径变细
+        const baseAlpha = ring.alpha * fade;
+        if (baseAlpha < 0.008) continue;                       // 淡到看不见就别画了
+
+        // 完整连续圆环（不分段、不留缺口）；透明度整体衰减，不做波光明暗
+        ctx.strokeStyle = `rgba(${ring.color[0]},${ring.color[1]},${ring.color[2]},${Math.max(0, baseAlpha)})`;
+        ctx.lineWidth = Math.max(0.5, ring.width * widthScale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(rp.x, rp.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    this._rippleRaf = canvas.requestAnimationFrame(() => this._rippleLoop());
+  },
+
+  // 停波纹绘制循环并清空（onHide/onUnload 时随 _koiClear 一起调）
+  _rippleClear() {
+    if (this._rippleRaf && this._rippleCanvas) {
+      try { this._rippleCanvas.cancelAnimationFrame(this._rippleRaf); } catch (e) {}
+    }
+    this._rippleRaf = null;
+    this._ripples = [];
+    // 缓冲归零：释放合成层纹理
+    if (this._rippleCanvas) {
+      this._rippleCanvas.width = 1;
+      this._rippleCanvas.height = 1;
+    }
+  },
+
   _koiClear() {
     const t = this._koi;
     if (!t) return;
     clearTimeout(t.timer);
     clearTimeout(t.restTimer);
     this._koiStopDraw();
+    this._rippleClear();
   },
 
   // 撒花 canvas 按需挂载：canvas 在真机是原生组件，渲染在独立原生层，

@@ -10,6 +10,9 @@
            位移动画在 JS rAF 中计算，不依赖 CSS transition -->
       <canvas type="2d" id="koiCanvas" class="koi-flip"></canvas>
     </view>
+    <!-- 水波纹层：放在 koi-clip 之后（同层渲染下 DOM 序靠后的 canvas 盖住靠前的），
+         波纹从鱼身上方漫过；常驻铺满整个水层，只有「点到鱼」时才生成波纹 -->
+    <canvas type="2d" id="rippleCanvas" class="ripple-canvas"></canvas>
   </view>
 
   <!-- 顶部导航：标题（动态对齐胶囊） -->

@@ -56,6 +56,20 @@ page {
   display: block;
 }
 
+/* 水波纹层：铺满整个 koi-layer（fixed 容器），DOM 序在 koi-clip 之后 → 盖在鱼身上。
+   pointer-events:none 与父层一致，点击仍由 .page 根容器的 onTapKoi 统一接收判定。
+   常驻而非按需挂载：点击是高频交互，原生 canvas 反复挂载/卸载会闪；且同层渲染后
+   常驻 canvas 不抢触摸事件（撒花那次踩的是「常驻全屏+未同层」的坑，这里两个条件都不同）。 */
+.ripple-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
 /* ===== 顶部导航栏（动态对齐胶囊） ===== */
 .nav-bar {
   position: relative;
