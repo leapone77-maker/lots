@@ -14,7 +14,9 @@ Page({
     // 全部记录（原始）
     allRecords: [],
     // 选中的日期（用于筛选）
-    selectedDate: ''
+    selectedDate: '',
+    // 所选日期是否有收藏签（「当日记录」标题行右侧⭐）
+    selectedHasFavorite: false
   },
 
   onLoad() {
@@ -56,7 +58,7 @@ Page({
       }).then(res => {
         if (res.result && res.result.code === 0) {
           // 已登录以数据库为准（draws 为唯一来源），不合并本地缓存
-          this._applyCloud(res.result.draws || {});
+          this._applyCloud(res.result.draws || {}, res.result.favs || {});
         } else {
           this._applyLocal(localRecords);
         }
@@ -67,9 +69,28 @@ Page({
     }
   },
 
+  /* ========== 收藏工具：读取收藏集合（元素 {date, id}，key=日期_签号） ========== */
+  _getFavSet() {
+    const favs = wx.getStorageSync('favoriteQian') || [];
+    const set = new Set();
+    favs.forEach(f => set.add((f.date || '') + '_' + f.id));
+    return set;
+  },
+
+  /* 本地收藏日期集合（供日历⭐用） */
+  _getFavDates() {
+    const set = new Set();
+    (wx.getStorageSync('favoriteQian') || []).forEach(f => {
+      if (f.date) set.add(f.date.slice(0, 10));
+    });
+    return set;
+  },
+
   /* ========== 仅本地记录（未登录 / 云端异常回退）========== */
   _applyLocal(records) {
     this._cloudChats = {};
+    this._favSet = this._getFavSet();
+    this._favDates = this._getFavDates();
     let shang = 0, zhong = 0, xia = 0;
     records.forEach(r => {
       const lv = (r.level || '').trim();
@@ -86,9 +107,17 @@ Page({
   },
 
   /* ========== 云端记录（已登录）：以数据库 draws 为唯一来源 ========== */
-  _applyCloud(draws) {
+  _applyCloud(draws, favs) {
     // 红点/统计/列表统一只看抽签记录（与"当日记录"列表同口径），聊天不再标记红点
     this._cloudChats = {};
+    // 收藏集合：云端 favs（{date:sign}）优先，转成与本地一致的 key 集合
+    const favSet = new Set();
+    Object.keys(favs || {}).forEach(date => {
+      if (favs[date]) favSet.add(date + '_' + favs[date]);
+    });
+    this._favSet = favSet;
+    // 收藏日期集合（供日历⭐用）
+    this._favDates = new Set(Object.keys(favs || {}));
     const records = [];
     Object.keys(draws).forEach(date => {
       const sign = draws[date];
@@ -133,6 +162,9 @@ Page({
     this.data.allRecords.forEach(r => {
       if (r.date) recordDates.add(r.date.slice(0, 10));
     });
+    // 收藏日期集合（收藏的签所在日期显示⭐，替代红点）
+    // 已登录来自云端 _applyCloud 存的 _favDates；未登录来自本地 _applyLocal 存的
+    const favDates = this._favDates || this._getFavDates();
 
     const days = [];
     // 上月填充
@@ -155,6 +187,7 @@ Page({
         isToday: dateStr === todayStr,
         isSelected: dateStr === this.data.selectedDate,
         hasRecord: recordDates.has(dateStr),
+        hasFavorite: favDates.has(dateStr),
         date: dateStr
       });
     }
@@ -201,13 +234,57 @@ Page({
 
   /* ========== 按日期筛选记录 ========== */
   _filterByDate(dateStr) {
+    const favSet = this._favSet || this._getFavSet();
     const filtered = this.data.allRecords
       .filter(r => r.date && r.date.startsWith(dateStr))
       .map(r => ({
         ...r,
         badgeText: '第' + (r.id || '?') + '签'
       }));
-    this.setData({ filteredRecords: filtered });
+    // 所选日期有收藏签 → 「当日记录」标题行右侧显示⭐
+    const selectedHasFavorite = filtered.some(r =>
+      favSet.has((r.date ? r.date.slice(0, 10) : '') + '_' + r.id)
+    );
+    this.setData({ filteredRecords: filtered, selectedHasFavorite });
+  },
+
+  /* ========== 点击标题行⭐取消收藏 ========== */
+  onUnfavorite() {
+    const date = this.data.selectedDate;
+    if (!date) return;
+    // 找到该日期下被收藏的记录（取第一个，正常一天一条）
+    const favSet = this._favSet || this._getFavSet();
+    const target = this.data.filteredRecords.find(r =>
+      favSet.has((r.date ? r.date.slice(0, 10) : '') + '_' + r.id)
+    );
+    if (!target) return;
+    const id = target.id;
+
+    // 1. 本地立即生效
+    const favs = wx.getStorageSync('favoriteQian') || [];
+    const key = date + '_' + id;
+    const idx = favs.findIndex(f => (f.date + '_' + f.id) === key);
+    if (idx >= 0) {
+      favs.splice(idx, 1);
+      wx.setStorageSync('favoriteQian', favs);
+    }
+    // 2. 刷新内存中的收藏集合（云端/本地两条路径统一重建）
+    if (this._favSet) this._favSet.delete(key);
+    if (this._favDates) this._favDates.delete(date);
+    // 3. UI 刷新：⭐消失 + 日历红点回来
+    this.setData({ selectedHasFavorite: false });
+    this._buildCalendar(this.data.year, this.data.month);
+    wx.showToast({ title: '已取消收藏', icon: 'none' });
+
+    // 4. 已登录异步同步云端 draws 表（favorite=false）
+    const userInfo = wx.getStorageSync('userInfo');
+    const token = userInfo ? userInfo.token : '';
+    if (token) {
+      wx.cloud.callFunction({
+        name: 'jieqian',
+        data: { action: 'toggleFavorite', token, date, favorite: false }
+      }).catch(() => {});
+    }
   },
 
   /* ========== 清空历史 ========== */

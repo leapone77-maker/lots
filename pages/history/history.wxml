@@ -45,16 +45,18 @@
             bindtap="onDayTap"
             data-date="{{item.date}}">
         <text class="day-num">{{item.day}}</text>
-        <view class="day-dot" wx:if="{{item.hasRecord && item.isCurrentMonth}}"></view>
+        <text class="day-star" wx:if="{{item.hasFavorite && item.isCurrentMonth}}">⭐</text>
+        <view class="day-dot" wx:elif="{{item.hasRecord && item.isCurrentMonth}}"></view>
       </view>
     </view>
   </view>
 
   <!-- 当日记录列表 -->
   <view class="records-section">
-    <!-- 标题栏 -->
+    <!-- 标题栏（右侧⭐可点击取消收藏） -->
     <view class="records-header">
       <text class="records-title">当日记录</text>
+      <text class="records-header-star" wx:if="{{selectedHasFavorite}}" catchtap="onUnfavorite">⭐</text>
     </view>
 
     <!-- 记录列表 -->

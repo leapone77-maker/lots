@@ -4,20 +4,11 @@
 
     <!-- 签诗卡片（自动展示） -->
     <view class="qian-card" wx:if="{{qian}}" bindlongpress="onLongPressQian">
-      <!-- 签号 + 等级 + 分享 -->
+      <!-- 签号 + 等级 -->
       <view class="qian-header">
         <view class="qian-header-left">
           <view class="qian-badge">{{qian.level}}</view>
           <text class="qian-title">第 {{qian.id}} 签 · {{drawDate}}</text>
-        </view>
-        <!-- 分享按钮：用普通 view 做绝对定位容器，避免 button 默认 width:100% 干扰 -->
-        <view class="qian-share-wrap" wx:if="{{hasDrawn && !localMode}}">
-          <button wx:if="{{isLoggedIn}}" class="qian-share-btn" open-type="share" bindtap="onShareTap">
-            <image class="qian-share-icon" src="/images/share-icon.png" mode="aspectFit"/>
-          </button>
-          <button wx:else class="qian-share-btn" bindtap="onShareTap">
-            <image class="qian-share-icon" src="/images/share-icon.png" mode="aspectFit"/>
-          </button>
         </view>
       </view>
 
@@ -57,9 +48,20 @@
       <view class="card-tip" wx:if="{{!localMode && !isLoggedIn}}">
         <text>💬 登录账号，可以得到更详细、更个性化的解读！</text>
       </view>
+
+      <!-- 收藏 + 分享按钮（固定在基础签文卡片内底部，不受互动对话影响） -->
+      <view class="card-actions" wx:if="{{hasDrawn}}">
+        <view class="card-btn" bindtap="onToggleFavorite">
+          <text class="card-btn-star {{isFavorite ? 'faved' : ''}}">{{isFavorite ? '★' : '☆'}}</text>
+          <text class="card-btn-text">{{isFavorite ? '已收藏' : '收藏此签'}}</text>
+        </view>
+        <button class="card-btn card-btn-share" open-type="share" bindtap="onShareTap">
+          <text class="card-btn-text">分享给朋友</text>
+        </button>
+      </view>
     </view>
 
-    <!-- 聊天消息列表 -->
+    <!-- 聊天消息列表（互动内容在按钮下方区域） -->
     <view class="chat-messages">
       <view class="message {{item.role}}" wx:for="{{chatMessages}}" wx:key="id" id="msg-{{item.id}}">
         <view class="message-avatar">
@@ -99,7 +101,7 @@
       </view>
       <textarea class="expand-textarea"
                 maxlength="300"
-                placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
+                placeholder="{{hasDrawn ? '请输入你想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
                 value="{{inputValue}}"
                 bindinput="onInput"
                 show-confirm-bar="{{false}}"/>
@@ -112,7 +114,7 @@
       </view>
       <input class="input-field"
              maxlength="300"
-             placeholder="{{hasDrawn ? '请输入您想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
+             placeholder="{{hasDrawn ? '请输入你想咨询的具体问题' : '先抽一签，再向阿鹏请教...'}}"
              value="{{inputValue}}"
              bindinput="onInput"
              confirm-type="send"

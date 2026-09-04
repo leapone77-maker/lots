@@ -19,10 +19,11 @@
  *        uid=关联 users._id（唯一索引，每用户一条）
  *        profile = { permanent: "长期事实文本", recent: [{text, date}] }
  *        updatedAt = 最后更新时间戳(Date.now())
- *   - draws   : { _id, uid, account, date, sign, chats:[{role,content,t}], createdAt }
+ *   - draws   : { _id, uid, account, date, sign, chats:[{role,content,t}], favorite, createdAt }
  *        签文独立表（users 只记账号信息），一人一天一条：
  *        uid=已登录为 users._id，未登录为设备游客ID(guest_xxx，前端 localStorage 持久)；
  *        date=抽签日期(YYYY-MM-DD)；sign=签号(0=仅聊天未抽签)；chats=当天聊天记录挂签文下；
+ *        favorite=是否收藏(bool，默认 undefined=未收藏，toggleFavorite 写入)；
  *        登录后前端调 mergeGuest 一次性把游客记录并入账号，同天冲突保留 createdAt 更早的整条；
  *        建议建 uid+date 组合索引。users 旧的 draws/chats 内嵌字段已废弃(2026-08-20 全量清空)
  *   - app_config (后台开关，手动创建一次): 文档 _id='global'
@@ -977,20 +978,39 @@ exports.main = async function(event, context) {
       return { code: 0, merged }
     }
 
-    // ---- 读取历史（签号 + 聊天），登录用户跨设备展示 ----
-    // 从 draws 集合聚合，返回结构与旧版一致 { draws:{date:sign}, chats:{date:[...] } }，前端零改动
+    // ---- 读取历史（签号 + 聊天 + 收藏），登录用户跨设备展示 ----
+    // 从 draws 集合聚合，返回结构 { draws:{date:sign}, chats:{date:[...]}, favs:{date:sign} }
+    // favs：收藏标记（favorite=true 的记录），value 带签号方便前端校验换签场景
     if (action === 'getHistory') {
       const token = event.token || ''
       const caller = await authByToken(token)
-      if (!caller) return { code: 401, draws: {}, chats: {} }
+      if (!caller) return { code: 401, draws: {}, chats: {}, favs: {} }
       const list = await draws.where({ uid: caller._id }).limit(400).get()
       const drawMap = {}
       const chatMap = {}
+      const favMap = {}
       ;(list.data || []).forEach(r => {
         if (r.sign) drawMap[r.date] = r.sign
         if (r.chats && r.chats.length) chatMap[r.date] = r.chats
+        if (r.favorite && r.sign) favMap[r.date] = r.sign
       })
-      return { code: 0, draws: drawMap, chats: chatMap }
+      return { code: 0, draws: drawMap, chats: chatMap, favs: favMap }
+    }
+
+    // ---- 收藏/取消收藏某天的签（写 draws 表当天记录的 favorite 字段）----
+    // 已登录：按 uid+date 定位记录翻转 favorite；未登录/无记录返回错误，前端仅用本地缓存
+    if (action === 'toggleFavorite') {
+      const token = event.token || ''
+      const date = event.date || ''
+      const favorite = event.favorite === true   // 目标状态：true=收藏，false=取消
+      if (!date) return { code: 1, msg: '参数缺失' }
+      const caller = await authByToken(token)
+      if (!caller) return { code: 401, msg: '请先登录' }
+      const exist = await draws.where({ uid: caller._id, date }).limit(1).get()
+      if (!exist.data || !exist.data.length) return { code: 2, msg: '当天无抽签记录' }
+      await draws.doc(exist.data[0]._id).update({ data: { favorite } })
+      console.log('[toggleFavorite] uid=' + caller._id + ' date=' + date + ' favorite=' + favorite)
+      return { code: 0, ok: true, favorite }
     }
 
     // ---- 预计算 shareId（只读不写库；仅点击分享按钮时才真正写 shares）----

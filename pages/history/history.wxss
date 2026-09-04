@@ -173,11 +173,24 @@ page {
 }
 
 .day-dot {
+  position: absolute;
+  bottom: 0rpx;
+  left: 50%;
+  transform: translateX(-50%);
   width: 10rpx;
   height: 10rpx;
   border-radius: 50%;
   background: #A8201A;
-  margin-top: 2rpx;
+}
+
+/* 收藏日：红点替换为⭐（绝对定位钉在格子底部，不挤压数字，与红点对齐） */
+.day-star {
+  position: absolute;
+  bottom: 0px;  /* 负值：压到格子下缘之外，⭐整体下沉 */
+  left: 51%;
+  transform: translateX(-50%);
+  font-size: 22rpx;
+  line-height: 1;
 }
 
 /* ===== 记录列表 ===== */
@@ -205,6 +218,17 @@ page {
   padding: 8rpx 22rpx;
   border-radius: 8rpx;
   font-size: 25rpx;
+}
+
+/* 「当日记录」标题行右侧的收藏⭐（1.5倍大，可点击取消收藏） */
+.records-header-star {
+  font-size: 33rpx;
+  line-height: 1;
+  padding: 6rpx 8rpx;  /* 扩大点击热区 */
+}
+
+.records-header-star:active {
+  opacity: 0.5;
 }
 
 .records-list {

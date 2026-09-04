@@ -34,7 +34,73 @@ Page({
     inputExpanded: false,  // 输入框是否展开为大文本域
     userProfile: '',       // 用户画像文本（从云端获取，不展示给用户）
     _shareId: '',          // 分享快照 ID（云函数返回）
-    drawDate: ''           // 抽签日期（YYYY-MM-DD），显示在签号后面
+    drawDate: '',          // 抽签日期（YYYY-MM-DD），显示在签号后面
+    isFavorite: false      // 当前签是否已收藏（按 日期+签号 判定）
+  },
+
+  /* ========== 收藏（本地存储 favoriteQian 兜底 + 已登录同步 draws 表，跨设备） ========== */
+  _favKey() {
+    return (this._chatDate || '') + '_' + (this.data.qian ? this.data.qian.id : '');
+  },
+
+  _loadFavorite() {
+    if (!this.data.qian) return;
+    const favs = wx.getStorageSync('favoriteQian') || [];
+    const key = this._favKey();
+    this.setData({ isFavorite: favs.some(f => (f.date + '_' + f.id) === key) });
+  },
+
+  /* 已登录则从云端拉收藏态覆盖本地（跨设备权威源）；本地缓存仍保留作离线兜底 */
+  _syncFavoriteFromCloud() {
+    const token = this.data.userInfo && this.data.userInfo.token;
+    if (!token || this.data.localMode || !this.data.qian) return;
+    const date = this._chatDate || '';
+    if (!date) return;
+    wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'getHistory', token }
+    }).then(res => {
+      if (!res.result || res.result.code !== 0) return;
+      const favs = res.result.favs || {};
+      // 云端有该日收藏记录 → 以云端为准（含签号校验，防止换签后旧收藏误标）
+      if (favs[date] !== undefined) {
+        const isFav = Number(favs[date]) === Number(this.data.qian.id);
+        this.setData({ isFavorite: isFav });
+        this._writeLocalFav(date, this.data.qian.id, isFav);
+      }
+    }).catch(() => {});
+  },
+
+  /* 写本地收藏缓存（供未登录/离线兜底） */
+  _writeLocalFav(date, id, isFav) {
+    const favs = wx.getStorageSync('favoriteQian') || [];
+    const key = date + '_' + id;
+    const idx = favs.findIndex(f => (f.date + '_' + f.id) === key);
+    if (isFav && idx < 0) {
+      favs.push({ date, id });
+    } else if (!isFav && idx >= 0) {
+      favs.splice(idx, 1);
+    }
+    wx.setStorageSync('favoriteQian', favs);
+  },
+
+  onToggleFavorite() {
+    if (!this.data.qian || !this.data.hasDrawn) return;
+    const target = !this.data.isFavorite;
+    const date = this._chatDate || '';
+    const id = this.data.qian.id;
+    // 1. 本地立即生效（秒响应）
+    this._writeLocalFav(date, id, target);
+    this.setData({ isFavorite: target });
+    wx.showToast({ title: target ? '已收藏 ⭐' : '已取消收藏', icon: 'none' });
+    // 2. 已登录异步同步云端 draws 表（失败不回滚，下次进页云端为准）
+    const token = this.data.userInfo && this.data.userInfo.token;
+    if (token && !this.data.localMode && date) {
+      wx.cloud.callFunction({
+        name: 'jieqian',
+        data: { action: 'toggleFavorite', token, date, favorite: target }
+      }).catch(() => {});
+    }
   },
 
   onLoad(options) {
@@ -56,6 +122,7 @@ Page({
       // 聊天记录按"抽签日期"隔离：同一天的签共享同一段对话，跨天/换签则开新会话
       this._chatDate = historyDate || cachedQian.date || getBeijingDateStr();
       this.setData({ drawDate: this._chatDate });
+      this._loadFavorite();
     } else if (options && options.id) {
       // 兜底：从参数构建（仅基本信息）
       const fallbackQian = fillQianFields({
@@ -72,6 +139,7 @@ Page({
       });
       this._chatDate = historyDate || getBeijingDateStr();
       this.setData({ drawDate: this._chatDate });
+      this._loadFavorite();
     }
 
     this.appConfig = config.getCachedConfig();
@@ -86,6 +154,8 @@ Page({
     if (historyDate && this.data.isLoggedIn) {
       this._loadCloudChat(historyDate);
     }
+    // 已登录 → 云端收藏态覆盖本地（跨设备权威）
+    if (this.data.isLoggedIn) this._syncFavoriteFromCloud();
 
     // 拉取后台开关，拿到最新值后用最新开关重算登录态（热更新）
     config.fetchConfig().then((cfg) => {
@@ -97,6 +167,8 @@ Page({
       if (historyDate && this.data.isLoggedIn && this.data.chatMessages.length === 0) {
         this._loadCloudChat(historyDate);
       }
+      // 热更新后已登录 → 同步云端收藏态
+      if (this.data.isLoggedIn) this._syncFavoriteFromCloud();
     });
   },
 
@@ -117,6 +189,8 @@ Page({
       });
       this._chatDate = cachedQian.date || getBeijingDateStr();
     }
+    // 刷新收藏态（可能从历史页点进来，或当天换了签）
+    if (this.data.qian) this._loadFavorite();
   },
 
   /* ========== 加载思源宋体 ========== */
@@ -244,6 +318,7 @@ Page({
     this._precomputeShareId();   // 登录后仅预计算 shareId，保证首次分享即有效（不写库）
     this.loadProfile();
     this.fetchQuota();
+    this._syncFavoriteFromCloud();   // 登录后用云端收藏态覆盖本地（跨设备）
     wx.showToast({ title: '登录成功', icon: 'success' });
 
     if (this._pendingQuestion) {
