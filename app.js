@@ -43,5 +43,9 @@ App({
     })
   },
 
-  globalData: {}
+  globalData: {
+    // 收藏变更暂存（同会话内即时同步用）：{ date: {id, favorite} }
+    // 详情页收藏/取消后写入，历史页 onShow 读取并叠加到 favs 上，避免云端异步延迟导致⭐不显示
+    favChanges: {}
+  }
 })

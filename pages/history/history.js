@@ -110,14 +110,22 @@ Page({
   _applyCloud(draws, favs) {
     // 红点/统计/列表统一只看抽签记录（与"当日记录"列表同口径），聊天不再标记红点
     this._cloudChats = {};
+    // 叠加同会话内的收藏变更（详情页刚点收藏返回时，云端异步尚未写入，用全局暂存保证⭐即时可见）
+    const app = getApp();
+    const changes = (app && app.globalData && app.globalData.favChanges) || {};
+    const mergedFavs = Object.assign({}, favs);
+    Object.keys(changes).forEach(date => {
+      const c = changes[date];
+      if (c.favorite) mergedFavs[date] = c.id; else delete mergedFavs[date];
+    });
     // 收藏集合：云端 favs（{date:sign}）优先，转成与本地一致的 key 集合
     const favSet = new Set();
-    Object.keys(favs || {}).forEach(date => {
-      if (favs[date]) favSet.add(date + '_' + favs[date]);
+    Object.keys(mergedFavs).forEach(date => {
+      if (mergedFavs[date]) favSet.add(date + '_' + mergedFavs[date]);
     });
     this._favSet = favSet;
     // 收藏日期集合（供日历⭐用）
-    this._favDates = new Set(Object.keys(favs || {}));
+    this._favDates = new Set(Object.keys(mergedFavs));
     const records = [];
     Object.keys(draws).forEach(date => {
       const sign = draws[date];
@@ -271,12 +279,17 @@ Page({
     // 2. 刷新内存中的收藏集合（云端/本地两条路径统一重建）
     if (this._favSet) this._favSet.delete(key);
     if (this._favDates) this._favDates.delete(date);
-    // 3. UI 刷新：⭐消失 + 日历红点回来
+    // 3. 写全局暂存（详情页若还开着，返回时收藏态也同步消失）
+    const app = getApp();
+    if (app && app.globalData) {
+      app.globalData.favChanges[date] = { id: id, favorite: false };
+    }
+    // 4. UI 刷新：⭐消失 + 日历红点回来
     this.setData({ selectedHasFavorite: false });
     this._buildCalendar(this.data.year, this.data.month);
     wx.showToast({ title: '已取消收藏', icon: 'none' });
 
-    // 4. 已登录异步同步云端 draws 表（favorite=false）
+    // 5. 已登录异步同步云端 draws 表（favorite=false）
     const userInfo = wx.getStorageSync('userInfo');
     const token = userInfo ? userInfo.token : '';
     if (token) {

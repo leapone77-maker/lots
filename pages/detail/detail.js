@@ -45,6 +45,14 @@ Page({
 
   _loadFavorite() {
     if (!this.data.qian) return;
+    // 优先读全局暂存（同会话内用户刚操作过，比本地/云端都新）
+    const date = this._chatDate || '';
+    const app = getApp();
+    const changes = (app && app.globalData && app.globalData.favChanges) || {};
+    if (changes[date]) {
+      this.setData({ isFavorite: changes[date].favorite && Number(changes[date].id) === Number(this.data.qian.id) });
+      return;
+    }
     const favs = wx.getStorageSync('favoriteQian') || [];
     const key = this._favKey();
     this.setData({ isFavorite: favs.some(f => (f.date + '_' + f.id) === key) });
@@ -62,6 +70,14 @@ Page({
     }).then(res => {
       if (!res.result || res.result.code !== 0) return;
       const favs = res.result.favs || {};
+      // 叠加同会话内全局暂存（历史页取消收藏后返回详情页，云端异步未写入时⭐同步消失）
+      const app = getApp();
+      const changes = (app && app.globalData && app.globalData.favChanges) || {};
+      if (changes[date]) {
+        // 有暂存 → 以暂存为准（用户刚操作过，比云端新）
+        this.setData({ isFavorite: changes[date].favorite && Number(changes[date].id) === Number(this.data.qian.id) });
+        return;
+      }
       // 云端有该日收藏记录 → 以云端为准（含签号校验，防止换签后旧收藏误标）
       if (favs[date] !== undefined) {
         const isFav = Number(favs[date]) === Number(this.data.qian.id);
@@ -93,7 +109,12 @@ Page({
     this._writeLocalFav(date, id, target);
     this.setData({ isFavorite: target });
     wx.showToast({ title: target ? '已收藏 ⭐' : '已取消收藏', icon: 'none' });
-    // 2. 已登录异步同步云端 draws 表（失败不回滚，下次进页云端为准）
+    // 2. 写全局暂存，历史页 onShow 即时可见（不等云端往返）
+    const app = getApp();
+    if (app && app.globalData) {
+      app.globalData.favChanges[date] = { id: id, favorite: target };
+    }
+    // 3. 已登录异步同步云端 draws 表（失败不回滚，下次进页云端为准）
     const token = this.data.userInfo && this.data.userInfo.token;
     if (token && !this.data.localMode && date) {
       wx.cloud.callFunction({
@@ -661,6 +682,22 @@ Page({
   /* ========== 格式化解读回复为 HTML ========== */
   formatReply(text) {
     if (!text) return '';
+    // 0. AI 偶发返回 JSON 字符串（{"answer":"...","profile":[...]}），剥离只取 answer 字段
+    var raw = String(text).trim();
+    if (raw.charAt(0) === '{') {
+      var extracted = '';
+      try {
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.answer === 'string') extracted = parsed.answer;
+      } catch (e) {
+        // JSON.parse 失败（如 answer 内含未转义换行）→ 正则兜底截取 "answer":"..." 字段
+        var m = raw.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (m) {
+          try { extracted = JSON.parse('"' + m[1] + '"'); } catch (e2) { extracted = m[1]; }
+        }
+      }
+      if (extracted && extracted.trim()) text = extracted;
+    }
     // 1. 清洗前缀与 HTML/Markdown 标签残留
     var s = String(text)
       .replace(/^(?:【?解签大师?】?|【?阿鹏趣签?】?|【?解读?】?|【?解答?】?)[：:，,\s]*/i, '')
@@ -703,12 +740,17 @@ Page({
       if (numMatch) {
         var numPrefix = numMatch[1] + ' ' + numMatch[2] + '：';
         var numBody = numMatch[3];
+        // 「行动指引」类序号行不走红字加粗，与普通段落保持统一样式
+        if (/行动指引/.test(numMatch[2])) {
+          parts.push('<div style="color:#444;margin:5px 0;line-height:1.85;font-size:14px;">' + t + '</div>');
+          continue;
+        }
         parts.push('<div style="margin:12px 0 8px 0;line-height:1.85;font-size:14px;"><span style="color:#A8201A;font-weight:bold;font-size:14px;">' + numPrefix + '</span><span style="color:#444;">' + numBody + '</span></div>');
         continue;
       }
 
-      // 短行标题（无句号逗号、较短，如"事业解析："）
-      if (t.length <= 20 && t.indexOf('。') < 0 && t.indexOf('，') < 0 && !/^<strong>/.test(t)) {
+      // 短行标题（无句号逗号、较短，如"事业解析："）——「行动指引」类行排除，走普通正文
+      if (t.length <= 20 && t.indexOf('。') < 0 && t.indexOf('，') < 0 && !/^<strong>/.test(t) && !/行动指引/.test(t)) {
         parts.push('<div style="color:#A8201A;font-weight:bold;font-size:15px;margin:18px 0 10px 0;padding-bottom:6px;border-bottom:1px solid rgba(168,32,26,0.12);">' + t + '</div>');
         continue;
       }
