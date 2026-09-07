@@ -875,7 +875,6 @@ Page({
   _precomputeShareId() {
     if (this.data._shareId) return              // 已算过，不重复请求
     if (!this.data.hasDrawn) return
-    if (this.data.localMode) return             // 本地模式不分享
     const token = this.data.userInfo && this.data.userInfo.token
     if (!token) return
     const q = this.data.qian || {}
@@ -893,7 +892,6 @@ Page({
   // 点击分享按钮时才真正写库生成/刷新分享快照（仅已登录可用）
   _refreshShare(callback) {
     if (!this.data.hasDrawn) return
-    if (this.data.localMode) return            // 本地模式不分享
     const token = this.data.userInfo && this.data.userInfo.token
     if (!token) return                          // 仅已登录账号可分享（已去掉匿名分享）
     const q = this.data.qian || {}
@@ -924,7 +922,6 @@ Page({
   // 分享按钮点击：未登录→弹登录框；已登录→弹出底部面板（分享到微信/生成海报）
   onShareTap() {
     if (!this.data.hasDrawn) return
-    if (this.data.localMode) return            // 本地模式不分享（按钮本就不显示）
     if (!this.data.isLoggedIn) {               // 未登录 → 弹登录框，登录后才能分享
       this.setData({ showLogin: true })
       return
