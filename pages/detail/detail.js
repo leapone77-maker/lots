@@ -1058,6 +1058,12 @@ Page({
         rr((W - whoW) / 2, 102, whoW, 30, 15); ctx.fill()
         center(whoText, 122, '600 12px sans-serif', '#B34A1E')
 
+        // 抽签日期（昵称胶团下方）
+        const drawDateText = this.data.drawDate || this._chatDate || '';
+        if (drawDateText) {
+          center(drawDateText, 148, '10px sans-serif', 'rgba(179,74,30,0.6)');
+        }
+
         // ---- 签卡（签号居中、等级移到签号下方缩小，下缘收紧）----
         const cardX = 37.5, cardY = 156, cardW = 300, cardH = 310
         ctx.save()
