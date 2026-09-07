@@ -1189,7 +1189,19 @@ Page({
   _exportPoster(canvas) {
     wx.canvasToTempFilePath({
       canvas,
-      success: (res) => this.setData({ posterUrl: res.tempFilePath }),
+      success: (res) => {
+        // iOS 微信对 wxfile:// 临时路径 saveImageToPhotosAlbum 有兼容问题，
+        // 先写入 USER_DATA_PATH 本地文件再保存
+        const destPath = (wx.env.USER_DATA_PATH || '') + '/poster_export.png'
+        try {
+          const data = wx.getFileSystemManager().readFileSync(res.tempFilePath)
+          wx.getFileSystemManager().writeFileSync(destPath, data)
+          this.setData({ posterUrl: destPath })
+        } catch (e) {
+          // 写入失败则直接用临时路径兜底
+          this.setData({ posterUrl: res.tempFilePath })
+        }
+      },
       fail: () => { this.setData({ posterShow: false }); wx.showToast({ title: '生成失败', icon: 'none' }) }
     })
   },
@@ -1203,28 +1215,36 @@ Page({
         filePath: url,
         success: () => { this.setData({ posterShow: false }); this.showCenterToast('已保存到相册') },
         fail: (e) => {
+          console.error('[onSavePoster] saveImageToPhotosAlbum fail:', e)
           if (e && /auth|deny/.test(e.errMsg || '')) {
             wx.openSetting()
           } else {
-            wx.showToast({ title: '保存失败', icon: 'none' })
+            wx.showToast({ title: '保存失败，请重试', icon: 'none' })
           }
         }
       })
     }
-    wx.getSetting({
-      success: (s) => {
-        if (s.authSetting['scope.writePhotosAlbum'] === false) {
-          wx.showModal({
-            title: '需要相册权限',
-            content: '保存海报需要访问相册，请在设置中开启',
-            confirmText: '去开启',
-            success: (m) => { if (m.confirm) wx.openSetting() }
-          })
-        } else {
-          save()
-        }
-      },
-      fail: save
+    // iOS 上先尝试 wx.authorize 主动请求相册权限，比 getSetting 更可靠
+    wx.authorize({
+      scope: 'scope.writePhotosAlbum',
+      success: save,
+      fail: () => {
+        wx.getSetting({
+          success: (s) => {
+            if (s.authSetting['scope.writePhotosAlbum'] === false) {
+              wx.showModal({
+                title: '需要相册权限',
+                content: '保存海报需要访问相册，请在设置中开启',
+                confirmText: '去开启',
+                success: (m) => { if (m.confirm) wx.openSetting() }
+              })
+            } else {
+              save()
+            }
+          },
+          fail: save
+        })
+      }
     })
   },
 
