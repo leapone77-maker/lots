@@ -108,7 +108,7 @@ Page({
     koiH: KOI_BASE_H
   },
 
-  onLoad() {
+  onLoad(options) {
     this._initNavBar();
     this.initSticks();
     this.appConfig = config.getCachedConfig();
@@ -129,6 +129,14 @@ Page({
     this._blingAudio = wx.createInnerAudioContext();
     this._blingAudio.src = 'audio/bling.mp3';
     this._initKoi();
+    // 扫海报小程序码进入：scene 带签号（q=88），直接打开该签详情页
+    if (options && options.scene) {
+      const scene = decodeURIComponent(options.scene || '')
+      const m = scene.match(/q=(\d+)/)
+      if (m && m[1]) {
+        wx.navigateTo({ url: '/pages/detail/detail?signId=' + m[1] })
+      }
+    }
   },
 
   onHide() {

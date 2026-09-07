@@ -55,7 +55,7 @@
           <text class="card-btn-star {{isFavorite ? 'faved' : ''}}">{{isFavorite ? '★' : '☆'}}</text>
           <text class="card-btn-text">{{isFavorite ? '已收藏' : '收藏此签'}}</text>
         </view>
-        <button class="card-btn card-btn-share" open-type="share" bindtap="onShareTap">
+        <button class="card-btn card-btn-share" bindtap="onShareTap">
           <text class="card-btn-text">分享给朋友</text>
         </button>
       </view>
@@ -133,4 +133,36 @@
   <view class="center-toast-mask" wx:if="{{centerToast.rendered}}" style="{{centerToast.boxStyle}}">
     <view class="center-toast-box">{{centerToast.text}}</view>
   </view>
+
+  <!-- 分享面板（底部滑出：分享到微信 / 生成海报） -->
+  <view class="share-sheet-mask" wx:if="{{sharePanelShow}}" bindtap="onCloseSharePanel"></view>
+  <view class="share-sheet {{sharePanelShow ? 'show' : ''}}">
+    <view class="share-sheet-title">分享这张签</view>
+    <view class="share-sheet-btns">
+      <button class="share-sheet-btn" open-type="share" bindtap="onShareWechat">
+        <text class="share-sheet-btn-icon">💬</text>
+        <text class="share-sheet-btn-text">分享到微信</text>
+      </button>
+      <view class="share-sheet-btn" bindtap="onGenPoster">
+        <text class="share-sheet-btn-icon">🖼️</text>
+        <text class="share-sheet-btn-text">生成海报</text>
+      </view>
+    </view>
+    <view class="share-sheet-cancel" bindtap="onCloseSharePanel">取消</view>
+  </view>
+
+  <!-- 海报预览弹层 -->
+  <view class="poster-mask" wx:if="{{posterShow}}" bindtap="onClosePoster">
+    <view class="poster-box" catchtap="noop">
+      <image class="poster-img" src="{{posterUrl}}" mode="widthFix" wx:if="{{posterUrl}}"/>
+      <view class="poster-loading" wx:else>海报生成中…</view>
+      <view class="poster-actions" wx:if="{{posterUrl}}">
+        <view class="poster-action-btn" bindtap="onSavePoster">保存到相册</view>
+        <view class="poster-action-btn plain" bindtap="onClosePoster">关闭</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 海报绘制画布（离屏，屏外隐藏） -->
+  <canvas type="2d" id="posterCanvas" class="poster-canvas" style="width:375px;height:640px;position:fixed;left:-2000px;top:0;"></canvas>
 </view>

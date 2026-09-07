@@ -1013,6 +1013,27 @@ exports.main = async function(event, context) {
       return { code: 0, ok: true, favorite }
     }
 
+    // ---- 生成带参数小程序码（海报二维码）----
+    // scene 带签号，好友扫码直达首页并落在该签；page 为空默认首页
+    // 返回 { code:0, image: 'data:image/png;base64,...' }，前端直接画到 canvas
+    // 注意：需小程序已有已发布版本，否则 wxacode 接口会报 41030
+    if (action === 'getQrCode') {
+      const signId = parseInt(event.signId, 10) || 0
+      try {
+        const res = await cloud.openapi.wxacode.getUnlimited({
+          scene: signId ? 'q=' + signId : '',
+          page: 'pages/index/index',
+          width: 280,
+          isHyaline: false
+        })
+        if (!res || !res.buffer) return { code: 1, msg: '生成失败' }
+        return { code: 0, image: 'data:image/png;base64,' + res.buffer.toString('base64') }
+      } catch (e) {
+        console.error('[getQrCode] error:', e)
+        return { code: 1, msg: String(e.errCode || e.message || '生成小程序码失败') }
+      }
+    }
+
     // ---- 预计算 shareId（只读不写库；仅点击分享按钮时才真正写 shares）----
     if (action === 'getShareId') {
       const token = event.token || ''

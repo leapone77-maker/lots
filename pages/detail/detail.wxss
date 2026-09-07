@@ -196,9 +196,68 @@ page {
 
 .card-btn-text {
   font-size: 27rpx;
+  font-weight: bold;
   color: #A8201A;
   letter-spacing: 1rpx;
 }
+
+/* ===== 分享面板（底部滑出）===== */
+.share-sheet-mask {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 900;
+}
+.share-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: #FFFDF8;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 32rpx 40rpx calc(24rpx + env(safe-area-inset-bottom));
+  z-index: 901;
+  transform: translateY(100%);
+  transition: transform 0.28s ease;
+}
+.share-sheet.show { transform: translateY(0); }
+.share-sheet-title {
+  text-align: center; font-size: 28rpx; color: #8a6d4f;
+  letter-spacing: 2rpx; margin-bottom: 28rpx;
+}
+.share-sheet-btns { display: flex; gap: 24rpx; }
+.share-sheet-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  background: #faf3e6; border-radius: 16rpx;
+  padding: 28rpx 0 24rpx; margin: 0; line-height: 1.4;
+}
+.share-sheet-btn::after { border: none; }
+.share-sheet-btn:active { opacity: 0.7; }
+.share-sheet-btn-icon { font-size: 44rpx; }
+.share-sheet-btn-text { font-size: 26rpx; color: #A8201A; font-weight: bold; margin-top: 8rpx; }
+.share-sheet-cancel {
+  margin-top: 24rpx; text-align: center;
+  font-size: 28rpx; color: #999; padding: 18rpx 0;
+}
+.share-sheet-cancel:active { opacity: 0.6; }
+
+/* ===== 海报预览弹层 ===== */
+.poster-mask {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 950;
+  display: flex; align-items: center; justify-content: center;
+}
+.poster-box { width: 560rpx; display: flex; flex-direction: column; align-items: center; }
+.poster-img { width: 560rpx; border-radius: 20rpx; box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+.poster-loading { color: #f5e8d0; font-size: 28rpx; letter-spacing: 4rpx; padding: 120rpx 0; }
+.poster-actions { display: flex; gap: 24rpx; margin-top: 32rpx; width: 100%; }
+.poster-action-btn {
+  flex: 1; text-align: center;
+  background: #A8201A; color: #f5e8d0;
+  font-size: 28rpx; font-weight: bold;
+  padding: 20rpx 0; border-radius: 44rpx;
+  letter-spacing: 2rpx;
+}
+.poster-action-btn:active { opacity: 0.75; }
+.poster-action-btn.plain { background: rgba(255,255,255,0.16); color: #eee; }
+.poster-canvas { pointer-events: none; }
 
 /* ===== 整体可滚动区域（签诗+解答+聊天 一起滚）===== */
 .main-scroll {

@@ -35,7 +35,10 @@ Page({
     userProfile: '',       // 用户画像文本（从云端获取，不展示给用户）
     _shareId: '',          // 分享快照 ID（云函数返回）
     drawDate: '',          // 抽签日期（YYYY-MM-DD），显示在签号后面
-    isFavorite: false      // 当前签是否已收藏（按 日期+签号 判定）
+    isFavorite: false,     // 当前签是否已收藏（按 日期+签号 判定）
+    sharePanelShow: false, // 底部分享面板是否显示
+    posterShow: false,     // 海报预览弹层是否显示
+    posterUrl: ''          // 海报图片临时路径
   },
 
   /* ========== 收藏（本地存储 favoriteQian 兜底 + 已登录同步 draws 表，跨设备） ========== */
@@ -125,8 +128,30 @@ Page({
   },
 
   onLoad(options) {
+    // 扫海报小程序码进入：带 signId，直接按签号从本地库构建（优先于今日缓存）
+    const scanSignId = options && options.signId ? parseInt(options.signId, 10) : 0
+    if (scanSignId) {
+      const q = QIAN_DB.find(x => x.id === scanSignId)
+      if (q) {
+        const scanQian = fillQianFields({
+          id: q.id, level: q.level, poem: q.poem, poemText: (q.poem || []).join('，'),
+          basic: q.basic || null, yiji: q.yiji || '', action: q.action || ''
+        })
+        this.setData({
+          qian: scanQian,
+          hasDrawn: true,
+          drawnId: q.id,
+          drawnLevel: q.level,
+          drawnPoem: scanQian.poemText,
+          drawnBasic: scanQian.basic
+        })
+        this._chatDate = getBeijingDateStr()
+        this.setData({ drawDate: this._chatDate })
+        this._scanMode = true   // 扫码围观模式：不加载本地聊天/收藏，纯展示
+      }
+    }
     // 从缓存读取今日签数据（首页抽签时已存入）
-    const cachedQian = wx.getStorageSync('cachedQian');
+    const cachedQian = !this._scanMode && wx.getStorageSync('cachedQian');
     // 历史页传入的日期（点记录跳转时带过来）
     const historyDate = options && options.date ? decodeURIComponent(options.date) : '';
 
@@ -194,6 +219,8 @@ Page({
   },
 
   onShow() {
+    // 扫码围观模式：保持扫码进入时的签，不被今日缓存覆盖
+    if (this._scanMode) return;
     // 每次显示时刷新签到状态（可能从历史页点进来）
     const cachedQian = wx.getStorageSync('cachedQian');
     if (cachedQian) {
@@ -894,7 +921,7 @@ Page({
     }).catch(() => { if (callback) callback() })
   },
 
-  // 分享按钮点击：已登录→刷新快照并触发微信原生分享面板；未登录→弹登录框
+  // 分享按钮点击：未登录→弹登录框；已登录→弹出底部面板（分享到微信/生成海报）
   onShareTap() {
     if (!this.data.hasDrawn) return
     if (this.data.localMode) return            // 本地模式不分享（按钮本就不显示）
@@ -902,7 +929,306 @@ Page({
       this.setData({ showLogin: true })
       return
     }
-    this._refreshShare()                        // 已登录 → 刷新快照，原生分享面板由 open-type="share" 触发
+    this._precomputeShareId()
+    this.setData({ sharePanelShow: true })
+  },
+
+  onCloseSharePanel() {
+    this.setData({ sharePanelShow: false })
+  },
+
+  // 面板里点「分享到微信」：关面板并刷新快照（open-type="share" 自动触发原生面板）
+  onShareWechat() {
+    this.setData({ sharePanelShow: false })
+    this._refreshShare()
+  },
+
+  noop() {},
+
+  /* ========== 海报生成 ========== */
+  onGenPoster() {
+    this.setData({ sharePanelShow: false, posterShow: true, posterUrl: '' })
+    this._drawPoster()
+  },
+
+  onClosePoster() {
+    this.setData({ posterShow: false })
+  },
+
+  // 取小程序码（dataURL → 本地临时文件），失败返回 null（海报仍生成，仅缺码）
+  _fetchQrCode(signId) {
+    if (this._qrCodePath) return Promise.resolve(this._qrCodePath)
+    return wx.cloud.callFunction({
+      name: 'jieqian',
+      data: { action: 'getQrCode', signId: signId }
+    }).then(res => {
+      const r = res.result || {}
+      if (r.code !== 0 || !r.image) return null
+      const base64 = r.image.replace(/^data:image\/\w+;base64,/, '')
+      const filePath = wx.env.USER_DATA_PATH + '/poster_qrcode.png'
+      wx.getFileSystemManager().writeFileSync(filePath, base64, 'base64')
+      this._qrCodePath = filePath
+      return filePath
+    }).catch(() => null)
+  },
+
+  async _drawPoster() {
+    const q = this.data.qian || {}
+    if (!q.id) { this.setData({ posterShow: false }); return }
+    const nickname = (this.data.userInfo && this.data.userInfo.nickname) || '游客'
+    // 宜忌拆解："今日宜活在当下局，忌活在过去。" → 宜 xxx / 忌 xxx
+    const yijiRaw = (q.yiji || '').replace(/[。\s]+$/, '')
+    const yiM = yijiRaw.match(/宜\s*([^，,。]+)/)
+    const jiM = yijiRaw.match(/忌\s*([^，,。]+)/)
+    const yiText = yiM ? yiM[1] : ''
+    const jiText = jiM ? jiM[1] : ''
+    const poemLines = Array.isArray(q.poem) ? q.poem : String(q.poemText || '').split(/[，。\n]/).filter(Boolean)
+
+    const qrPath = await this._fetchQrCode(q.id)
+
+    wx.createSelectorQuery().in(this).select('#posterCanvas')
+      .fields({ node: true, size: true }).exec((res) => {
+        if (!res || !res[0] || !res[0].node) { this.setData({ posterShow: false }); return }
+        const canvas = res[0].node
+        const ctx = canvas.getContext('2d')
+        const dpr = wx.getWindowInfo ? (wx.getWindowInfo().pixelRatio || 2) : 2
+        const W = 375, H = 640
+        canvas.width = W * dpr
+        canvas.height = H * dpr
+        ctx.scale(dpr, dpr)
+
+        const rr = (x, y, w, h, r) => {
+          ctx.beginPath()
+          ctx.moveTo(x + r, y)
+          ctx.arcTo(x + w, y, x + w, y + h, r)
+          ctx.arcTo(x + w, y + h, x, y + h, r)
+          ctx.arcTo(x, y + h, x, y, r)
+          ctx.arcTo(x, y, x + w, y, r)
+          ctx.closePath()
+        }
+        const center = (text, y, font, color, letterSpacing) => {
+          ctx.font = font
+          ctx.fillStyle = color
+          if (letterSpacing) {
+            // 逐字加字距居中
+            const chars = String(text).split('')
+            const widths = chars.map(c => ctx.measureText(c).width)
+            const total = widths.reduce((a, b) => a + b, 0) + letterSpacing * (chars.length - 1)
+            let x = (W - total) / 2
+            chars.forEach((c, i) => { ctx.fillText(c, x, y); x += widths[i] + letterSpacing })
+          } else {
+            ctx.textAlign = 'center'
+            ctx.fillText(text, W / 2, y)
+            ctx.textAlign = 'left'
+          }
+        }
+
+        // ---- 背景：暖橙渐变 ----
+        const bg = ctx.createLinearGradient(0, 0, W, H)
+        bg.addColorStop(0, '#FFE8D6')
+        bg.addColorStop(0.45, '#FFD9B8')
+        bg.addColorStop(1, '#FFC9A3')
+        ctx.fillStyle = bg
+        ctx.fillRect(0, 0, W, H)
+
+        // 装饰圆
+        ctx.fillStyle = 'rgba(255,180,120,0.4)'
+        ctx.beginPath(); ctx.arc(W + 70 - 220, 40 + 110, 110, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = 'rgba(255,255,255,0.35)'
+        ctx.beginPath(); ctx.arc(-50 + 75, H - 90 - 75, 75, 0, Math.PI * 2); ctx.fill()
+
+        // 星星点缀
+        ctx.fillStyle = '#FF9E5E'
+        ctx.font = '15px sans-serif'
+        ctx.fillText('✦', 34, 96); ctx.font = '11px sans-serif'
+        ctx.fillText('✦', W - 34, 150); ctx.font = '12px sans-serif'
+        ctx.fillText('✦', 26, 430)
+
+        // ---- 顶部通栏朱红横带（高 78px）----
+        const band = ctx.createLinearGradient(0, 0, 0, 78)
+        band.addColorStop(0, '#A8201A')
+        band.addColorStop(1, '#8C1A15')
+        ctx.fillStyle = band
+        ctx.fillRect(0, 0, W, 78)
+        center('阿鹏趣签', 36, 'bold 20px sans-serif', '#F5E8D0', 14)
+        center('每日一签 · 心想事成', 58, '10px sans-serif', 'rgba(245,232,208,0.85)', 3)
+
+        // ---- 昵称胶囊 ----
+        ctx.font = '600 12px sans-serif'
+        const whoText = nickname + ' 抽到了这支签'
+        const whoW = ctx.measureText(whoText).width + 36
+        ctx.fillStyle = 'rgba(255,255,255,0.75)'
+        rr((W - whoW) / 2, 102, whoW, 30, 15); ctx.fill()
+        center(whoText, 122, '600 12px sans-serif', '#B34A1E')
+
+        // ---- 签卡（签号居中、等级移到签号下方缩小，下缘收紧）----
+        const cardX = 37.5, cardY = 156, cardW = 300, cardH = 310
+        ctx.save()
+        ctx.shadowColor = 'rgba(179,74,30,0.18)'
+        ctx.shadowBlur = 12; ctx.shadowOffsetY = 4
+        ctx.fillStyle = '#FFFDF8'
+        rr(cardX, cardY, cardW, cardH, 16); ctx.fill()
+        ctx.restore()
+        ctx.strokeStyle = '#FFE3C2'
+        ctx.lineWidth = 2
+        rr(cardX, cardY, cardW, cardH, 16); ctx.stroke()
+
+        // 签号（单独一行居中）
+        const noText = '第 ' + q.id + ' 签'
+        center(noText, cardY + 40, '900 22px sans-serif', '#E8632A')
+
+        // 等级胶囊（签号下方居中，缩小到 80%）
+        const lvText = q.level || ''
+        ctx.font = '700 9px sans-serif'
+        const lvW = ctx.measureText(lvText).width + 18
+        const lvX = (W - lvW) / 2, lvY = cardY + 48, lvH = 17
+        const lvGrad = ctx.createLinearGradient(lvX, 0, lvX + lvW, 0)
+        lvGrad.addColorStop(0, '#FF9E5E'); lvGrad.addColorStop(1, '#E8632A')
+        ctx.fillStyle = lvGrad
+        rr(lvX, lvY, lvW, lvH, lvH / 2); ctx.fill()
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillText(lvText, W / 2, lvY + 12.5)
+        ctx.textAlign = 'left'
+
+        // 签诗（居中，行高 34）
+        const poemStartY = cardY + 96
+        poemLines.slice(0, 4).forEach((line, i) => {
+          center(line, poemStartY + i * 34, '600 16px sans-serif', '#5C3A21', 2)
+        })
+
+        // 虚线分隔
+        const dashY = cardY + 96 + 3 * 34 + 16
+        ctx.strokeStyle = '#FFC9A3'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 4])
+        ctx.beginPath()
+        ctx.moveTo(cardX + 24, dashY)
+        ctx.lineTo(cardX + cardW - 24, dashY)
+        ctx.stroke()
+        ctx.setLineDash([])
+
+        // 宜忌
+        if (yiText || jiText) {
+          const yiPart = '宜 ' + yiText
+          const jiPart = '忌 ' + jiText
+          ctx.font = '11px sans-serif'
+          const gap = 24
+          const totalW = ctx.measureText(yiPart).width + ctx.measureText(jiPart).width + gap
+          let x = (W - totalW) / 2
+          ctx.fillStyle = '#E8632A'
+          ctx.fillText('宜', x, dashY + 24)
+          x += ctx.measureText('宜').width + 4
+          ctx.fillStyle = '#A05C2E'
+          ctx.fillText(yiText, x, dashY + 24)
+          x += ctx.measureText(yiText).width + gap - 4
+          ctx.fillStyle = '#E8632A'
+          ctx.fillText('忌', x, dashY + 24)
+          x += ctx.measureText('忌').width + 4
+          ctx.fillStyle = '#A05C2E'
+          ctx.fillText(jiText, x, dashY + 24)
+        }
+
+        // 行动（宜忌下方，浅橙底圆角条）
+        const actionText = (q.action || '').replace(/[。\s]+$/, '')
+        if (actionText) {
+          const actY = dashY + 40, actH = 30
+          ctx.font = '11px sans-serif'
+          const label = '行动 '
+          const labelW = ctx.measureText(label).width
+          const textW = ctx.measureText(actionText).width
+          const boxW = labelW + textW + 28
+          ctx.fillStyle = '#FFF3E6'
+          rr((W - boxW) / 2, actY, boxW, actH, 15); ctx.fill()
+          let ax = (W - boxW) / 2 + 14
+          ctx.fillStyle = '#E8632A'
+          ctx.font = '700 11px sans-serif'
+          ctx.fillText('行动', ax, actY + 20)
+          ax += labelW
+          ctx.font = '11px sans-serif'
+          ctx.fillStyle = '#A05C2E'
+          ctx.fillText(actionText, ax, actY + 20)
+        }
+
+        // ---- 底部圆形小程序码 ----
+        const qrCx = W / 2, qrCy = 530, qrR = 42
+        const drawQr = (img) => {
+          ctx.save()
+          ctx.beginPath(); ctx.arc(qrCx, qrCy, qrR - 6, 0, Math.PI * 2); ctx.clip()
+          ctx.drawImage(img, qrCx - (qrR - 6), qrCy - (qrR - 6), (qrR - 6) * 2, (qrR - 6) * 2)
+          ctx.restore()
+        }
+        const drawTip = () => {
+          center('长按扫码 · 看看你的今日运势', qrCy + qrR + 22, '10px sans-serif', '#A05C2E', 2)
+        }
+        const finish = () => {
+          // 白底圆 + 朱红描边
+          ctx.save()
+          ctx.shadowColor = 'rgba(168,32,26,0.18)'
+          ctx.shadowBlur = 10; ctx.shadowOffsetY = 3
+          ctx.fillStyle = '#FFFFFF'
+          ctx.beginPath(); ctx.arc(qrCx, qrCy, qrR, 0, Math.PI * 2); ctx.fill()
+          ctx.restore()
+          ctx.strokeStyle = '#A8201A'
+          ctx.lineWidth = 2
+          ctx.beginPath(); ctx.arc(qrCx, qrCy, qrR - 1, 0, Math.PI * 2); ctx.stroke()
+
+          if (qrPath) {
+            const img = canvas.createImage()
+            img.onload = () => { drawQr(img); drawTip(); this._exportPoster(canvas) }
+            img.onerror = () => { drawTip(); this._exportPoster(canvas) }
+            img.src = qrPath
+          } else {
+            // 无码时画占位文字
+            center('趣签', qrCy + 4, 'bold 12px sans-serif', '#A8201A')
+            drawTip()
+            this._exportPoster(canvas)
+          }
+        }
+        finish()
+      })
+  },
+
+  _exportPoster(canvas) {
+    wx.canvasToTempFilePath({
+      canvas,
+      success: (res) => this.setData({ posterUrl: res.tempFilePath }),
+      fail: () => { this.setData({ posterShow: false }); wx.showToast({ title: '生成失败', icon: 'none' }) }
+    })
+  },
+
+  // 保存海报到相册（含授权处理）
+  onSavePoster() {
+    const url = this.data.posterUrl
+    if (!url) return
+    const save = () => {
+      wx.saveImageToPhotosAlbum({
+        filePath: url,
+        success: () => { this.setData({ posterShow: false }); this.showCenterToast('已保存到相册') },
+        fail: (e) => {
+          if (e && /auth|deny/.test(e.errMsg || '')) {
+            wx.openSetting()
+          } else {
+            wx.showToast({ title: '保存失败', icon: 'none' })
+          }
+        }
+      })
+    }
+    wx.getSetting({
+      success: (s) => {
+        if (s.authSetting['scope.writePhotosAlbum'] === false) {
+          wx.showModal({
+            title: '需要相册权限',
+            content: '保存海报需要访问相册，请在设置中开启',
+            confirmText: '去开启',
+            success: (m) => { if (m.confirm) wx.openSetting() }
+          })
+        } else {
+          save()
+        }
+      },
+      fail: save
+    })
   },
 
   // 微信原生分享菜单回调（右上角 "..." → 转发给朋友）
