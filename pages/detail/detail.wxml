@@ -8,7 +8,7 @@
       <view class="qian-header">
         <view class="qian-header-left">
           <view class="qian-badge">{{qian.level}}</view>
-          <text class="qian-title">第 {{qian.id}} 签 · {{drawDate}}</text>
+          <text class="qian-title">第 {{qian.id}} 签 · {{drawDate}}（{{userInfo.nickname || '无名之人'}}）</text>
         </view>
       </view>
 

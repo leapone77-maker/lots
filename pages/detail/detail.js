@@ -972,7 +972,7 @@ Page({
   async _drawPoster() {
     const q = this.data.qian || {}
     if (!q.id) { this.setData({ posterShow: false }); return }
-    const nickname = (this.data.userInfo && this.data.userInfo.nickname) || '游客'
+    const nickname = (this.data.userInfo && this.data.userInfo.nickname) || '无名之人'
     // 宜忌拆解："今日宜活在当下局，忌活在过去。" → 宜 xxx / 忌 xxx
     const yijiRaw = (q.yiji || '').replace(/[。\s]+$/, '')
     const yiM = yijiRaw.match(/宜\s*([^，,。]+)/)

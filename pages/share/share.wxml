@@ -30,7 +30,7 @@
       <view class="qian-card">
         <view class="qian-header">
           <view class="qian-badge">{{share.level}}</view>
-          <text class="qian-title">第 {{share.signId}} 签 · {{shareDate}}</text>
+          <text class="qian-title">第 {{share.signId}} 签 · {{shareDate}}（{{share.nickname || '无名之人'}}）</text>
         </view>
 
         <view class="qian-poem-section">
@@ -63,7 +63,7 @@
       <!-- 聊天记录 -->
       <view class="chat-section" wx:if="{{chatMessages.length > 0}}">
         <view class="chat-header">
-          <text class="chat-title">{{share.nickname}}的咨询记录</text>
+          <text class="chat-title">{{share.nickname || '无名之人'}}的咨询记录</text>
         </view>
         <view class="chat-messages">
           <view class="message {{item.role}}" wx:for="{{chatMessages}}" wx:key="index">
