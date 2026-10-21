@@ -3,16 +3,16 @@
   "packOptions": {
     "ignore": [
       {
-        "type": "file",
-        "value": "NATIVE_GUIDE.md"
+        "value": "NATIVE_GUIDE.md",
+        "type": "file"
       },
       {
-        "type": "folder",
-        "value": "preview"
+        "value": "preview",
+        "type": "folder"
       },
       {
-        "type": "regexp",
-        "value": "(^|/)(preview_|action_preview_).*\\.html$"
+        "value": "(^|/)(preview_|action_preview_).*\\.html$",
+        "type": "regexp"
       }
     ],
     "include": []
@@ -44,7 +44,7 @@
     }
   },
   "compileType": "miniprogram",
-  "libVersion": "3.0.0",
+  "libVersion": "3.17.0",
   "appid": "wxa6a74da701ccc44d",
   "projectname": "jieqian-native",
   "condition": {},
