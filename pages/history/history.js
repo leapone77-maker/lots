@@ -51,14 +51,14 @@ Page({
     const userInfo = wx.getStorageSync('userInfo');
     const token = userInfo ? userInfo.token : '';
     if (token) {
-      // 已登录：优先从云端拉取（跨设备一致），失败回退本地
+      // 已登录：云端为主，但本地缓存补充云端缺的日期
+      // （localMode 审核期抽签不写云端；只信云端会把本地记录挡住，造成"抽了签历史没记录"）
       wx.cloud.callFunction({
         name: 'jieqian',
         data: { action: 'getHistory', token }
       }).then(res => {
         if (res.result && res.result.code === 0) {
-          // 已登录以数据库为准（draws 为唯一来源），不合并本地缓存
-          this._applyCloud(res.result.draws || {}, res.result.favs || {});
+          this._applyCloud(res.result.draws || {}, res.result.favs || {}, localRecords);
         } else {
           this._applyLocal(localRecords);
         }
@@ -106,8 +106,8 @@ Page({
     this._buildCalendar(this.data.year, this.data.month);
   },
 
-  /* ========== 云端记录（已登录）：以数据库 draws 为唯一来源 ========== */
-  _applyCloud(draws, favs) {
+  /* ========== 云端记录（已登录）：云端 draws 为主，本地 drawHistory 补云端缺的日期 ========== */
+  _applyCloud(draws, favs, localRecords) {
     // 红点/统计/列表统一只看抽签记录（与"当日记录"列表同口径），聊天不再标记红点
     this._cloudChats = {};
     // 叠加同会话内的收藏变更（详情页刚点收藏返回时，云端异步尚未写入，用全局暂存保证⭐即时可见）
@@ -140,6 +140,24 @@ Page({
         basic: q ? q.basic : null,
         yiji: q ? q.yiji : '',
         action: q ? q.action : ''
+      });
+    });
+    // 合并本地 drawHistory 中云端缺失的日期（localMode 审核期抽签不落云端）
+    // 规则：云端已有该日期 → 以云端为准；云端没有 → 采纳本地（含 level/poem/basic/yiji/action 完整字段）
+    const cloudDates = new Set(records.map(r => r.date));
+    (localRecords || []).forEach(r => {
+      if (!r || !r.date) return;
+      const dateKey = String(r.date).slice(0, 10);
+      if (cloudDates.has(dateKey)) return;
+      records.push({
+        date: dateKey,
+        time: r.time || '',
+        id: r.id,
+        level: r.level || '未知',
+        poemTitle: r.poemTitle || ('第' + r.id + '签'),
+        basic: r.basic || null,
+        yiji: r.yiji || '',
+        action: r.action || ''
       });
     });
     records.sort((a, b) => b.date.localeCompare(a.date));

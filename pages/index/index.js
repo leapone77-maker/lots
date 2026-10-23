@@ -896,8 +896,10 @@ Page({
         this._saveMemory(`抽到第${qian.id}签 ${qian.level}`);
       }
 
-      // 当日签号同步云端（供历史页跨设备展示）：已登录用 token，未登录用设备游客ID；localMode 纯本地不同步
-      if (!this.data.localMode) {
+      // 当日签号同步云端（供历史页跨设备展示）
+      // 已登录用户：无视 localMode 都写云端（审核期也不丢数据）
+      // 游客用户：localMode=true 时不写（无跨设备需求）；localMode=false 才用 guestId 写
+      if (this.data.isLoggedIn || !this.data.localMode) {
         const drawToken = (this.data.isLoggedIn && this.data.userInfo) ? this.data.userInfo.token : '';
         wx.cloud.callFunction({
           name: 'jieqian',
