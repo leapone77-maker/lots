@@ -972,7 +972,8 @@ Page({
   async _drawPoster() {
     const q = this.data.qian || {}
     if (!q.id) { this.setData({ posterShow: false }); return }
-    const nickname = (this.data.userInfo && this.data.userInfo.nickname) || '无名之人'
+    // localMode=true（审核/纯本地）时不显示昵称，避免海报出现“无名之人”占位
+    const nickname = this.data.localMode ? '' : ((this.data.userInfo && this.data.userInfo.nickname) || '无名之人')
     // 宜忌拆解："今日宜活在当下局，忌活在过去。" → 宜 xxx / 忌 xxx
     const yijiRaw = (q.yiji || '').replace(/[。\s]+$/, '')
     const yiM = yijiRaw.match(/宜\s*([^，,。]+)/)
@@ -1052,7 +1053,7 @@ Page({
 
         // ---- 昵称胶囊 ----
         ctx.font = '600 12px sans-serif'
-        const whoText = nickname + ' 抽到了这支签'
+        const whoText = nickname ? (nickname + ' 抽到了这支签') : '抽到了这支签'
         const whoW = ctx.measureText(whoText).width + 36
         ctx.fillStyle = 'rgba(255,255,255,0.75)'
         rr((W - whoW) / 2, 102, whoW, 30, 15); ctx.fill()
